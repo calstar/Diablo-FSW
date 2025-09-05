@@ -15,6 +15,7 @@
 #include "../comms/include/GPSMessage.hpp"
 #include "../utl/Elodin.hpp"
 #include "../utl/TCPSocket.hpp"
+#include "../utl/dbConfig.hpp"
 
 // Global variables for cleanup
 std::unique_ptr<Socket> LocalSock;
@@ -242,8 +243,14 @@ int main(int argc, char* argv[]) {
     
     // Initialize socket connection to remote Elodin database
     LocalSock = std::make_unique<Socket>(groundstation_ip.c_str(), groundstation_port);
+    // Socket constructor automatically connects, no need for separate connect() call
     
     std::cout << "✅ Connected to groundstation database. Starting fake sensor generators..." << std::endl;
+    
+    // Generate database configuration (send vtable schemas)
+    std::cout << "Generating database configuration..." << std::endl;
+    cppGenerateDBConfig();
+    std::cout << "Database configuration complete!" << std::endl;
     
     // Start sensor generator threads
     std::thread pt_thread(generatePTData);

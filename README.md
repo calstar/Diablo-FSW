@@ -59,8 +59,8 @@ A distributed sensor data collection and visualization system built on the Elodi
 
 4. **View data:**
    ```bash
-   python3 groundstation/scripts/sensor_data_viewer.py --host 127.0.0.1 --port 2240
-   ```
+   elodin
+```
 
 ### Distributed Mode (Ground Station + Remote)
 
@@ -70,8 +70,8 @@ A distributed sensor data collection and visualization system built on the Elodi
    elodin-db run [::]:2240 ~/.local/share/elodin/test_db
    
    # Start data viewer
-   python3 groundstation/scripts/sensor_data_viewer.py --host 0.0.0.0 --port 2240
-   ```
+   elodin
+      ```
 
 2. **On Remote Machine (Jetson):**
    ```bash

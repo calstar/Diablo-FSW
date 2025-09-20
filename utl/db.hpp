@@ -2803,6 +2803,12 @@ struct OpRef {
 
     uint16_t value;
 
+    // Default constructor
+    OpRef() = default;
+    
+    // Constructor
+    explicit OpRef(uint16_t val) : value(val) {}
+
     size_t encoded_size() const {
         size_t size = 0;
         size += postcard_size_u16(value);
@@ -3925,6 +3931,12 @@ struct SetComponentMetadata {
 
     ComponentMetadata value;
 
+    // Default constructor
+    SetComponentMetadata() = default;
+    
+    // Constructor
+    explicit SetComponentMetadata(ComponentMetadata val) : value(std::move(val)) {}
+
     size_t encoded_size() const {
         size_t size = 0;
         size += value.encoded_size();
@@ -4124,6 +4136,12 @@ struct SetEntityMetadata {
     static constexpr std::string_view TYPE_NAME = "SetEntityMetadata";
 
     EntityMetadata value;
+
+    // Default constructor
+    SetEntityMetadata() = default;
+    
+    // Constructor
+    explicit SetEntityMetadata(EntityMetadata val) : value(std::move(val)) {}
 
     size_t encoded_size() const {
         size_t size = 0;

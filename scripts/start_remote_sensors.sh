@@ -22,3 +22,5 @@ echo "Sensor PID: $SENSOR_PID"
 echo "Press Ctrl+C to stop sensors"
 trap "kill $SENSOR_PID; exit" INT
 wait
+
+

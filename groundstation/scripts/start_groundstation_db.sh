@@ -144,3 +144,5 @@ done
 
 echo "❌ Error: Database failed to start on port $PORT"
 return 1
+
+

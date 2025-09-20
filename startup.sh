@@ -32,3 +32,5 @@ echo ""
 echo "Example usage:"
 echo "  source startup.sh"
 echo "  tmux_start_sensors.sh config/config_base.toml test_db"
+
+

@@ -25,6 +25,7 @@ bool running = true;
 
 // Signal handler for graceful shutdown
 void signalHandler(int signum) {
+    (void)signum; // Suppress unused parameter warning
     std::cout << "\nShutting down sensor generator..." << std::endl;
     running = false;
 }

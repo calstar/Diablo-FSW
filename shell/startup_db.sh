@@ -136,3 +136,5 @@ done
 
 echo "Error: Database failed to start on port 2240"
 return 1
+
+

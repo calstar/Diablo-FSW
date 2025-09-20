@@ -110,3 +110,5 @@ sleep 5
 
 # Attach to the session
 tmux attach -t "$SESSION_NAME"
+
+

@@ -325,3 +325,5 @@ telnet <groundstation_ip> 2240
 - Adjust sensor frequencies based on requirements
 - Monitor CPU and memory usage
 - Implement resource limits
+
+

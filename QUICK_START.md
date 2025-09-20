@@ -1,155 +1,109 @@
 # Quick Start Guide
 
-This guide will help you set up the distributed sensor system with a groundstation (laptop) and Jetson (remote device).
+Get the sensor system up and running in minutes!
 
-## Prerequisites
+## 🚀 Local Testing (Single Machine)
 
-- **Elodin Database**: Install `elodin-db` on both systems
-- **Network**: Both devices on same network
-- **Dependencies**: CMake, tmux, C++17 compiler
-
-## Step 1: Groundstation Setup (Laptop)
-
-1. **Clone/Setup the system**:
-   ```bash
-   cd sensor_system
-   source startup.sh
-   ```
-
-2. **Build the system**:
-   ```bash
-   ./build.sh
-   ```
-
-3. **Find your IP address**:
-   ```bash
-   hostname -I | awk '{print $1}'
-   # Note this IP - you'll need it for the Jetson
-   ```
-
-4. **Start the groundstation**:
-   ```bash
-   ./groundstation/scripts/tmux_start_groundstation.sh test_db
-   ```
-
-5. **Verify it's working**:
-   - You should see "Database is ready and listening on <IP>:2240"
-   - The sensor viewer should start showing data (will be empty until Jetson connects)
-
-## Step 2: Jetson Setup (Remote Device)
-
-1. **Copy the system to Jetson**:
-   ```bash
-   # From your laptop
-   scp -r sensor_system/ user@jetson-ip:/home/user/
-   ```
-
-2. **On the Jetson, setup environment**:
-   ```bash
-   cd sensor_system
-   source startup.sh
-   ```
-
-3. **Build the system**:
-   ```bash
-   ./build.sh
-   ```
-
-4. **Update the groundstation IP**:
-   ```bash
-   # Edit config/config_jetson.toml
-   nano config/config_jetson.toml
-   
-   # Change this line to your laptop's IP:
-   groundstation_ip = "192.168.1.100"  # Replace with your laptop's IP
-   ```
-
-5. **Start the Jetson sensors**:
-   ```bash
-   ./shell/tmux_start_jetson_sensors.sh config/config_jetson.toml <laptop-ip>
-   ```
-
-## Step 3: Verify Everything Works
-
-1. **On the groundstation**, you should see:
-   - Database logs in left pane
-   - Real-time sensor data in right pane
-   - Data from all 6 sensor types streaming
-
-2. **On the Jetson**, you should see:
-   - Sensor data being generated and sent
-   - Connection status to groundstation
-
-## Troubleshooting
-
-### Connection Issues
-
-1. **Check network connectivity**:
-   ```bash
-   # From Jetson, ping groundstation
-   ping <groundstation-ip>
-   ```
-
-2. **Check if port 2240 is open**:
-   ```bash
-   # On groundstation
-   sudo ufw allow 2240
-   # or
-   sudo ufw disable  # for testing only
-   ```
-
-3. **Check if database is listening**:
-   ```bash
-   # On groundstation
-   netstat -tlnp | grep 2240
-   ```
-
-### Build Issues
-
-1. **Missing dependencies**:
-   ```bash
-   sudo apt update
-   sudo apt install cmake build-essential tmux
-   ```
-
-2. **Elodin database not found**:
-   ```bash
-   # Make sure elodin-db is in PATH
-   which elodin-db
-   ```
-
-## Stopping the System
-
-- **Groundstation**: `tmux kill-session -t groundstation`
-- **Jetson**: `tmux kill-session -t jetson_sensors`
-
-## What You Should See
-
-### Groundstation Output
-```
-[14:30:15.123] PT Sensor
-  time_pt                : 1704123015.123
-  pressure               : 101325.45 Pa
-  temperature            : 25.67 °C
-  time_monotonic         : 1704123015123456789
-
-[14:30:15.133] IMU Sensor
-  time_imu               : 1704123015.133
-  accel                  : [0.123, -0.045, 9.812] m/s²
-  gyro                   : [0.001, 0.002, -0.001] rad/s
-  time_monotonic         : 1704123015133456789
+### 1. Build the System
+```bash
+cd sensor_system
+mkdir build && cd build
+cmake ..
+make
 ```
 
-### Jetson Output
-```
-PT: P=101325.45 Pa, T=25.67 C
-IMU: Accel=[0.123, -0.045, 9.812], Gyro=[0.001, 0.002, -0.001]
-TC: T=150.23 C, V=0.0067 V
+### 2. Start Everything
+```bash
+# Terminal 1: Start database
+elodin-db run [::]:2240 ~/.local/share/elodin/test_db
+
+# Terminal 2: Start sensors
+./scripts/fake_sensor_generator 127.0.0.1 2240
+
+# Terminal 3: View data
+python3 groundstation/scripts/sensor_data_viewer.py --host 127.0.0.1 --port 2240
 ```
 
-## Next Steps
+### 3. Verify It's Working
+- You should see continuous "[SENT]" messages from the sensor generator
+- The viewer should show real-time plots of all sensor data
+- Database logs should show "inserting vtable" messages (not BufferUnderflow errors)
 
-- Modify sensor data ranges in config files
-- Add new sensor types
-- Implement real sensor drivers
-- Add data logging and analysis tools
+## 🌐 Distributed Deployment (Ground Station + Remote)
+
+### Ground Station (Laptop)
+```bash
+# Start ground station
+./groundstation/scripts/start_groundstation.sh
+```
+
+### Remote Machine (Jetson)
+```bash
+# Build first
+mkdir build && cd build && cmake .. && make
+
+# Start remote sensors (replace with your ground station IP)
+./scripts/start_remote_sensors.sh 192.168.1.100 2240
+```
+
+## 🔧 Troubleshooting
+
+### No Data in Viewer?
+1. Check database is running: `ps aux | grep elodin-db`
+2. Check sensors are running: `ps aux | grep fake_sensor_generator`
+3. Check database logs for errors
+4. Verify packet IDs match between `dbConfig.hpp` and sensor generator
+
+### Connection Issues?
+1. Test connectivity: `telnet <ip> 2240`
+2. Check firewall: `sudo ufw status`
+3. Verify IP addresses in configuration files
+
+### Build Issues?
+1. Ensure C++20 compiler: `gcc --version`
+2. Check CMake version: `cmake --version`
+3. Install dependencies: `sudo apt install build-essential cmake`
+
+## 📊 What You Should See
+
+### Sensor Generator Output
+```
+✅ Connected to Elodin database at 127.0.0.1:2240
+Generating database configuration...
+Database configuration complete!
+Starting fake sensor generators...
+IMU: Accel=[0.1, 0.2, 9.8], Gyro=[0.01, 0.02, 0.03] [SENT]
+PT: P=101325.5 Pa, T=25.1 C [SENT]
+TC: T=150.2 C, V=0.005 V
+...
+```
+
+### Database Logs
+```
+2025-09-04 16:20:14.835  INFO inserting vtable id=[1, 0]
+2025-09-04 16:20:14.835  INFO inserting vtable id=[2, 0]
+...
+```
+
+### Viewer Interface
+- Real-time plots for all 7 sensor types
+- Time cursor moving continuously
+- Data points appearing in real-time
+- Configurable time windows
+
+## 🎯 Next Steps
+
+1. **Customize Sensors**: Edit sensor frequencies and data ranges in `scripts/fake_sensor_generator.cpp`
+2. **Add New Sensors**: Follow the pattern in `comms/include/` and `utl/dbConfig.hpp`
+3. **Deploy to Production**: Use the systemd services in `DEPLOYMENT.md`
+4. **Monitor Performance**: Use `scripts/health_check.sh` for automated monitoring
+
+## 📚 Full Documentation
+
+- `README.md` - Complete system overview
+- `DEPLOYMENT.md` - Production deployment guide
+- `config/` - Configuration files for different environments
+
+## 🆘 Need Help?
+
+Check the troubleshooting section in `README.md` or create an issue in the repository.

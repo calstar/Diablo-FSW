@@ -18,3 +18,5 @@ make -j$(nproc)
 
 echo "✅ Build complete!"
 echo "Executable location: $(pwd)/scripts/fake_sensor_generator"
+
+

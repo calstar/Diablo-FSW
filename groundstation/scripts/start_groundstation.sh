@@ -1,5 +1,12 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
+
+# Cross-platform IPv6 address handling
+get_ipv6_bind_address() {
+    local port="$1"
+    # Use printf to avoid shell globbing issues with [::] syntax
+    printf '[::]:%s' "$port"
+}
 
 echo "Starting Ground Station..."
 
@@ -12,7 +19,7 @@ rm -rf ~/.local/share/elodin/test_db*
 
 # Start database
 echo "Starting Elodin database..."
-elodin-db run [::]:2240 ~/.local/share/elodin/test_db &
+elodin-db run "$(get_ipv6_bind_address 2240)" ~/.local/share/elodin/test_db &
 DB_PID=$!
 
 # Wait for database to start

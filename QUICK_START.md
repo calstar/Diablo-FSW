@@ -15,7 +15,10 @@ make
 ### 2. Start Everything
 ```bash
 # Terminal 1: Start database
+# On Linux/bash:
 elodin-db run [::]:2240 ~/.local/share/elodin/test_db
+# On macOS/zsh (quote the address):
+elodin-db run '[::]:2240' ~/.local/share/elodin/test_db
 
 # Terminal 2: Start sensors
 ./scripts/fake_sensor_generator 127.0.0.1 2240

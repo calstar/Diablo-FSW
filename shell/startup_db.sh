@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 
+# Cross-platform IPv6 address handling
+get_ipv6_bind_address() {
+    local port="$1"
+    # Use printf to avoid shell globbing issues with [::] syntax
+    printf '[::]:%s' "$port"
+}
+
 # Check for source
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     # Script is being executed directly
@@ -64,7 +71,7 @@ else
     # Treat as name under default root path
     TMP_DB_PATH="$DB_ROOT_PATH/$DB_NAME"
 fi
-DB_HOST="[::]:$PORT"
+DB_HOST=$(get_ipv6_bind_address "$PORT")
 METADATA_SUFFIX="_metadata"
 # Where the metadata for the DB lives
 TMP_DB_META_PATH="${TMP_DB_PATH}${METADATA_SUFFIX}"

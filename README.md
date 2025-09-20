@@ -49,7 +49,8 @@ A distributed sensor data collection and visualization system built on the Elodi
 
 2. **Start the database:**
    ```bash
-   elodin-db run [::]:2240 ~/.local/share/elodin/test_db
+   # Cross-platform compatible (works on both Linux and macOS):
+   elodin-db run '[::]:2240' ~/.local/share/elodin/test_db
    ```
 
 3. **Start sensor generators:**
@@ -67,7 +68,7 @@ A distributed sensor data collection and visualization system built on the Elodi
 1. **On Ground Station (Laptop):**
    ```bash
    # Start database
-   elodin-db run [::]:2240 ~/.local/share/elodin/test_db
+   elodin-db run '[::]:2240' ~/.local/share/elodin/test_db
    
    # Start data viewer
    elodin
@@ -161,7 +162,7 @@ make
 ### Debug Mode
 Run with verbose output:
 ```bash
-RUST_LOG=debug elodin-db run [::]:2240 ~/.local/share/elodin/test_db
+RUST_LOG=debug elodin-db run '[::]:2240' ~/.local/share/elodin/test_db
 ```
 
 ## License

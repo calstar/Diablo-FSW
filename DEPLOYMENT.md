@@ -90,7 +90,8 @@ rm -rf ~/.local/share/elodin/test_db*
 
 # Start database
 echo "Starting Elodin database..."
-elodin-db run [::]:2240 ~/.local/share/elodin/test_db &
+# Cross-platform compatible command:
+elodin-db run '[::]:2240' ~/.local/share/elodin/test_db &
 DB_PID=$!
 
 # Wait for database to start

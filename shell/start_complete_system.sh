@@ -37,16 +37,17 @@ get_ipv6_bind_address() {
 
 # Check and setup environment
 check_environment() {
-    # Check if we're in the right directory
-    if [[ ! -f "startup.sh" ]]; then
-        echo -e "${RED}❌ Please run this script from the sensor_system root directory${NC}"
+    # Check if we're in the right directory (should be shell/ directory)
+    if [[ ! -f "../startup.sh" ]]; then
+        echo -e "${RED}❌ Please run this script from the shell/ directory${NC}"
+        echo -e "${YELLOW}💡 Usage: cd shell && ./start_complete_system.sh${NC}"
         exit 1
     fi
     
     # Auto-source startup.sh if ROOT_SENSOR_DIR isn't set
     if [[ -z "${ROOT_SENSOR_DIR:-}" ]]; then
         echo -e "${YELLOW}🔧 Setting up environment...${NC}"
-        source startup.sh
+        source ../startup.sh
         echo -e "${GREEN}✅ Environment setup complete${NC}"
         echo
     fi

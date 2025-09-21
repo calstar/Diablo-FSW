@@ -2,17 +2,35 @@
 
 Get the Diablo-FSW telemetry system up and running in minutes!
 
-## 🚀 Local Testing (Single Machine)
+## 🚀 **Recommended: One-Command Launch**
+
+### **Quick Start (3-Pane Tmux)**
+```bash
+cd shell
+./quick_start.sh [database_name]
+```
+
+**This automatically creates:**
+- **Pane 1**: Elodin Database
+- **Pane 2**: Sensor Generators  
+- **Pane 3**: Data Visualizer
+
+### **Clean Shutdown**
+```bash
+cd shell
+./shutdown_system.sh
+```
+
+## 🔧 **Advanced: Manual Setup**
 
 ### 1. Build the System
 ```bash
-cd sensor_system
 mkdir build && cd build
 cmake ..
 make
 ```
 
-### 2. Start Everything
+### 2. Manual Startup
 ```bash
 # Terminal 1: Start database
 # On Linux/bash:

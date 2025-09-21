@@ -1,6 +1,30 @@
-# Deployment Guide
+# Diablo-FSW Sensor System - Deployment Guide
 
-This guide covers deploying the sensor system to remote machines, specifically for distributed operation between a ground station (laptop) and remote sensors (Jetson or other Linux machines).
+This guide covers deploying the Diablo-FSW telemetry system to remote machines for distributed flight operations.
+
+## 🚀 **Quick Deployment**
+
+### **Automated Launch**
+```bash
+cd shell
+./quick_start.sh [database_name]
+```
+
+### **Clean Shutdown**
+```bash
+cd shell
+./shutdown_system.sh
+```
+
+### **Configuration Management**
+```bash
+cd config
+python3 generate_configs.py --force --validate
+```
+
+## 📋 **Manual Deployment**
+
+This guide covers manual deployment for distributed operation between a ground station (laptop) and remote sensors (Jetson or other Linux machines).
 
 ## Prerequisites
 

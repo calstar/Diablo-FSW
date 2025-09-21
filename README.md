@@ -30,15 +30,28 @@ A distributed sensor data collection and visualization system for the Diablo Fli
 
 ## Quick Start
 
-### Prerequisites
+### **🚀 One-Command Launch (Recommended)**
+```bash
+cd shell
+./quick_start.sh [db_name]
+```
+This launches a 3-pane tmux session with database, sensors, and visualizer.
+
+### **🛑 Clean Shutdown**
+```bash
+cd shell
+./shutdown_system.sh
+```
+
+### **⚙️ Prerequisites**
 
 - C++20 compiler (GCC 10+ or Clang 12+)
 - CMake 3.16+
 - Python 3.8+
 - Elodin database
-- Linux (tested on Ubuntu 20.04+)
+- Linux (flight computers) or macOS (development)
 
-### Local Mode (Single Machine)
+### **📋 Advanced Setup**
 
 1. **Build the system:**
    ```bash

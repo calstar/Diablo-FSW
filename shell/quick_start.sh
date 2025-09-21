@@ -6,7 +6,7 @@ set -euo pipefail
 # Make sure ROOT_SENSOR_DIR is set
 if [[ -z "${ROOT_SENSOR_DIR:-}" ]]; then
     echo "Setting up environment..."
-    source startup.sh
+    source ../startup.sh
 fi
 
 # Default values
@@ -64,7 +64,7 @@ tmux select-pane -t "$SESSION_NAME":0 -T "DB"
     # Add third pane for visualizer
     tmux split-window -v -t "$SESSION_NAME":0.1 -c "$ROOT_SENSOR_DIR"
     sleep $SLEEP_TIME_SHELL_ENTER
-    tmux send-keys -t "$SESSION_NAME":0.2 "python3 scripts/view_sensor_data.py --host 127.0.0.1 --port 2240" C-m
+    tmux send-keys -t "$SESSION_NAME":0.2 "elodin" C-m
     tmux select-pane -t "$SESSION_NAME":0.2 -T "Visualizer"
 
     echo "✅ Sensor system started successfully!"

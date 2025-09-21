@@ -27,9 +27,10 @@ print_banner() {
 check_prerequisites() {
     echo -e "${BLUE}🔍 Checking prerequisites...${NC}"
     
-    # Check if we're in the right directory
-    if [[ ! -f "startup.sh" || ! -d "scripts" || ! -d "config" ]]; then
-        echo -e "${RED}❌ Please run this script from the sensor_system root directory${NC}"
+    # Check if we're in the right directory (should be shell/ directory)
+    if [[ ! -f "../startup.sh" || ! -d "../scripts" || ! -d "../config" ]]; then
+        echo -e "${RED}❌ Please run this script from the shell/ directory${NC}"
+        echo -e "${YELLOW}💡 Usage: cd shell && ./migrate_to_diablo.sh${NC}"
         exit 1
     fi
     

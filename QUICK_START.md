@@ -1,6 +1,6 @@
-# Quick Start Guide
+# Diablo-FSW Sensor System - Quick Start Guide
 
-Get the sensor system up and running in minutes!
+Get the Diablo-FSW telemetry system up and running in minutes!
 
 ## 🚀 Local Testing (Single Machine)
 
@@ -16,7 +16,7 @@ make
 ```bash
 # Terminal 1: Start database
 # On Linux/bash:
-elodin-db run [::]:2240 ~/.local/share/elodin/test_db
+elodin-db run '[::]:2240' ~/.local/share/elodin/test_db
 # On macOS/zsh (quote the address):
 elodin-db run '[::]:2240' ~/.local/share/elodin/test_db
 

@@ -8,8 +8,10 @@
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 #include <algorithm>
 #include <array>
@@ -76,6 +78,27 @@ public:
     server_addr.sin_port = htons(port);
     server_addr.sin_addr.s_addr = inet_addr(ip);
 
+    // Enable TCP keepalive to detect dead connections
+    int keepalive = 1;
+    if (setsockopt(fd_, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive)) < 0) {
+      std::cerr << "Warning: Failed to enable TCP keepalive" << std::endl;
+    }
+    
+    // Set keepalive parameters (Linux-specific)
+    #ifdef __linux__
+    int keepidle = 60;   // Start keepalive after 60 seconds of inactivity
+    int keepintvl = 10;  // Send keepalive every 10 seconds
+    int keepcnt = 3;     // Give up after 3 failed keepalive attempts
+    
+    setsockopt(fd_, IPPROTO_TCP, TCP_KEEPIDLE, &keepidle, sizeof(keepidle));
+    setsockopt(fd_, IPPROTO_TCP, TCP_KEEPINTVL, &keepintvl, sizeof(keepintvl));
+    setsockopt(fd_, IPPROTO_TCP, TCP_KEEPCNT, &keepcnt, sizeof(keepcnt));
+    #endif
+    
+    // Set socket to non-blocking for better error detection
+    // int flags = fcntl(fd_, F_GETFL, 0);
+    // fcntl(fd_, F_SETFL, flags | O_NONBLOCK);
+    
     if (::connect(fd_, reinterpret_cast<struct sockaddr *>(&server_addr),
                   sizeof(server_addr)) < 0) {
       int err = errno;

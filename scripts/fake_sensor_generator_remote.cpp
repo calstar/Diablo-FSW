@@ -3,6 +3,7 @@
 #include <chrono>
 #include <random>
 #include <memory>
+#include <atomic>
 #include <signal.h>
 #include <unistd.h>
 
@@ -21,6 +22,43 @@
 std::unique_ptr<Socket> LocalSock;
 std::unique_ptr<Socket> GroundStationSock;
 bool running = true;
+
+// Connection refresh variables
+std::string groundstation_ip_global;
+int groundstation_port_global;
+std::mutex connection_mutex;
+
+// Diagnostic variables
+std::atomic<int> total_packets_sent{0};
+std::atomic<int> total_write_errors{0};
+std::atomic<int> connection_refreshes{0};
+auto start_time = std::chrono::high_resolution_clock::now();
+
+// Connection refresh function
+bool refreshConnection() {
+    std::lock_guard<std::mutex> lock(connection_mutex);
+    try {
+        std::cout << "🔄 Refreshing database connection..." << std::endl;
+        
+        // Create new connection
+        auto new_socket = std::make_unique<Socket>(groundstation_ip_global.c_str(), groundstation_port_global);
+        
+        // Replace the old connection
+        LocalSock = std::move(new_socket);
+        
+        // Re-send database configuration for new connection
+        std::cout << "🔄 Re-sending database configuration..." << std::endl;
+        cppGenerateDBConfig();
+        
+        connection_refreshes++;
+        std::cout << "✅ Database connection refreshed successfully! (Refresh #" << connection_refreshes << ")" << std::endl;
+        return true;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "❌ Connection refresh failed: " << e.what() << std::endl;
+        return false;
+    }
+}
 
 // Signal handler for graceful shutdown
 void signalHandler(int signum) {
@@ -50,11 +88,29 @@ void generatePTData() {
         
         set_pt_measurement(pt_msg, time_s, pressure, temperature, time_ns);
         
-        // Write to database
+        // Write to database with connection protection
         std::array<uint8_t, 2> packet_id = {0x01, 0x00}; // PT sensor ID
-        write_to_elodindb(packet_id, pt_msg);
-        
-        std::cout << "PT: P=" << pressure << " Pa, T=" << temperature << " C" << std::endl;
+        try {
+            std::lock_guard<std::mutex> lock(connection_mutex);
+            write_to_elodindb(packet_id, pt_msg);
+            LocalSock->flush_elodin(); // Flush buffer to ensure data is sent
+            total_packets_sent++;
+            
+            // Log every 50 packets (5 seconds) with timing info
+            if (total_packets_sent % 50 == 0) {
+                auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+                    std::chrono::high_resolution_clock::now() - start_time).count();
+                std::cout << "📊 [" << elapsed << "s] Total packets: " << total_packets_sent 
+                         << ", Errors: " << total_write_errors << ", Refreshes: " << connection_refreshes << std::endl;
+            }
+            
+            std::cout << "PT: P=" << pressure << " Pa, T=" << temperature << " C [SENT #" << total_packets_sent << "]" << std::endl;
+        } catch (const std::exception& e) {
+            total_write_errors++;
+            std::cerr << "❌ PT sensor write failed: " << e.what() << std::endl;
+            running = false; // Stop all threads
+            break;
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(100)); // 10 Hz
     }
 }
@@ -80,8 +136,9 @@ void generateTCData() {
         // Write to database
         std::array<uint8_t, 2> packet_id = {0x02, 0x00}; // TC sensor ID
         write_to_elodindb(packet_id, tc_msg);
+        LocalSock->flush_elodin(); // Flush buffer to ensure data is sent
         
-        std::cout << "TC: T=" << temperature << " C, V=" << voltage << " V" << std::endl;
+        std::cout << "TC: T=" << temperature << " C, V=" << voltage << " V [SENT]" << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(200)); // 5 Hz
     }
 }
@@ -107,8 +164,9 @@ void generateRTDData() {
         // Write to database
         std::array<uint8_t, 2> packet_id = {0x03, 0x00}; // RTD sensor ID
         write_to_elodindb(packet_id, rtd_msg);
+        LocalSock->flush_elodin(); // Flush buffer to ensure data is sent
         
-        std::cout << "RTD: T=" << temperature << " C, R=" << resistance << " Ohm" << std::endl;
+        std::cout << "RTD: T=" << temperature << " C, R=" << resistance << " Ohm [SENT]" << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(500)); // 2 Hz
     }
 }
@@ -141,9 +199,10 @@ void generateIMUData() {
         // Write to database
         std::array<uint8_t, 2> packet_id = {0x04, 0x00}; // IMU sensor ID
         write_to_elodindb(packet_id, imu_msg);
+        LocalSock->flush_elodin(); // Flush buffer to ensure data is sent
         
         std::cout << "IMU: Accel=[" << accel[0] << ", " << accel[1] << ", " << accel[2] 
-                  << "], Gyro=[" << gyro[0] << ", " << gyro[1] << ", " << gyro[2] << "]" << std::endl;
+                  << "], Gyro=[" << gyro[0] << ", " << gyro[1] << ", " << gyro[2] << "] [SENT]" << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(10)); // 100 Hz
     }
 }
@@ -170,9 +229,10 @@ void generateBarometerData() {
         // Write to database
         std::array<uint8_t, 2> packet_id = {0x05, 0x00}; // Barometer sensor ID
         write_to_elodindb(packet_id, bar_msg);
+        LocalSock->flush_elodin(); // Flush buffer to ensure data is sent
         
         std::cout << "Barometer: P=" << pressure << " Pa, Alt=" << altitude 
-                  << " m, T=" << temperature << " C" << std::endl;
+                  << " m, T=" << temperature << " C [SENT]" << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(50)); // 20 Hz
     }
 }
@@ -215,24 +275,25 @@ void generateGPSData() {
         // Write to database
         std::array<uint8_t, 2> packet_id_vel = {0x07, 0x00}; // GPS Velocity ID
         write_to_elodindb(packet_id_vel, gps_vel_msg);
+        LocalSock->flush_elodin(); // Flush buffer to ensure data is sent
         
         std::cout << "GPS: Lat=" << latitude << ", Lon=" << longitude 
                   << ", Alt=" << altitude << ", Vel=[" << velocity_x << ", " 
-                  << velocity_y << ", " << velocity_z << "]" << std::endl;
+                  << velocity_y << ", " << velocity_z << "] [SENT]" << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // 1 Hz
     }
 }
 
 int main(int argc, char* argv[]) {
     // Parse command line arguments
-    std::string groundstation_ip = "127.0.0.1";
-    int groundstation_port = 2240;
+    groundstation_ip_global = "127.0.0.1";
+    groundstation_port_global = 2240;
     
     if (argc >= 2) {
-        groundstation_ip = argv[1];
+        groundstation_ip_global = argv[1];
     }
     if (argc >= 3) {
-        groundstation_port = std::stoi(argv[2]);
+        groundstation_port_global = std::stoi(argv[2]);
     }
     
     // Set up signal handlers
@@ -240,10 +301,10 @@ int main(int argc, char* argv[]) {
     signal(SIGTERM, signalHandler);
     
     std::cout << "🚀 Starting Remote Sensor Generator..." << std::endl;
-    std::cout << "   Groundstation: " << groundstation_ip << ":" << groundstation_port << std::endl;
+    std::cout << "   Groundstation: " << groundstation_ip_global << ":" << groundstation_port_global << std::endl;
     
     // Initialize socket connection to remote Elodin database
-    LocalSock = std::make_unique<Socket>(groundstation_ip.c_str(), groundstation_port);
+    LocalSock = std::make_unique<Socket>(groundstation_ip_global.c_str(), groundstation_port_global);
     // Socket constructor automatically connects, no need for separate connect() call
     
     std::cout << "✅ Connected to groundstation database. Starting fake sensor generators..." << std::endl;
@@ -253,13 +314,53 @@ int main(int argc, char* argv[]) {
     cppGenerateDBConfig();
     std::cout << "Database configuration complete!" << std::endl;
     
-    // Start sensor generator threads
+    // Start heartbeat monitor thread with database flush
+    std::thread heartbeat_thread([]() {
+        int last_count = 0;
+        while (running) {
+            std::this_thread::sleep_for(std::chrono::seconds(10));
+            if (!running) break;
+            
+            int current_count = total_packets_sent;
+            auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::high_resolution_clock::now() - start_time).count();
+            
+            // Refresh connection every 70 seconds to prevent 90-second stall
+            if (elapsed > 0 && elapsed % 70 == 0) {
+                std::cout << "🔄 [" << elapsed << "s] Connection refresh time! Refreshing database connection..." << std::endl;
+                if (refreshConnection()) {
+                    std::cout << "✅ [" << elapsed << "s] Connection refreshed successfully!" << std::endl;
+                } else {
+                    std::cerr << "❌ [" << elapsed << "s] Connection refresh failed!" << std::endl;
+                }
+            } else {
+                // Regular database flush for other times
+                try {
+                    LocalSock->flush_elodin();
+                    std::cout << "🔄 [" << elapsed << "s] Database flush executed" << std::endl;
+                } catch (const std::exception& e) {
+                    std::cerr << "❌ Database flush failed: " << e.what() << std::endl;
+                }
+            }
+                
+            if (current_count == last_count && elapsed > 10) {
+                std::cerr << "⚠️  [" << elapsed << "s] WARNING: No packets sent in last 10 seconds! "
+                         << "Total: " << current_count << ", Errors: " << total_write_errors << std::endl;
+            } else {
+                std::cout << "💓 [" << elapsed << "s] Heartbeat: " << current_count 
+                         << " packets sent, " << (current_count - last_count) << " in last 10s" << std::endl;
+            }
+            last_count = current_count;
+        }
+    });
+    
+    // Start sensor generator threads (GPS temporarily disabled for debugging)
     std::thread pt_thread(generatePTData);
     std::thread tc_thread(generateTCData);
     std::thread rtd_thread(generateRTDData);
     std::thread imu_thread(generateIMUData);
     std::thread barometer_thread(generateBarometerData);
-    std::thread gps_thread(generateGPSData);
+    // std::thread gps_thread(generateGPSData);  // TEMPORARILY DISABLED
     
     // Wait for all threads to complete
     pt_thread.join();
@@ -267,7 +368,8 @@ int main(int argc, char* argv[]) {
     rtd_thread.join();
     imu_thread.join();
     barometer_thread.join();
-    gps_thread.join();
+    // gps_thread.join();  // TEMPORARILY DISABLED
+    heartbeat_thread.join();
     
     std::cout << "Sensor generator shutdown complete." << std::endl;
     return 0;

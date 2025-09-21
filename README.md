@@ -1,23 +1,24 @@
-# Sensor System
+# Diablo-FSW Sensor System
 
-A distributed sensor data collection and visualization system built on the Elodin time-series database. This system simulates various sensor types (PT, TC, RTD, IMU, Barometer, GPS) and streams data to a central database for real-time monitoring and analysis.
+A distributed sensor data collection and visualization system for the Diablo Flight Software project, built on the Elodin time-series database. This system provides real-time telemetry collection and monitoring for rocket flight systems, simulating various sensor types for development and testing.
 
 ## Features
 
-- **Multiple Sensor Types**: Pressure/Temperature (PT), Thermocouple (TC), RTD, IMU (Accelerometer/Gyroscope), Barometer, GPS Position/Velocity
-- **Real-time Data Streaming**: Continuous data generation with configurable frequencies
-- **Stochastic Data**: Realistic sensor data with trends, drift, periodic variations, and noise
-- **Distributed Architecture**: Ground station (laptop) + Remote sensors (Jetson)
-- **Local Testing**: Single-machine mode for development and testing
-- **Real-time Visualization**: Python-based data viewer with time-series plots
-- **Monotonic Time**: Proper time synchronization using CLOCK_MONOTONIC
+- **Flight-Ready Sensor Types**: Pressure/Temperature (PT), Thermocouple (TC), RTD, IMU (Accelerometer/Gyroscope), Barometer, GPS Position/Velocity
+- **Real-time Telemetry Streaming**: Continuous data generation with configurable frequencies for flight operations
+- **Realistic Flight Data**: Stochastic sensor data with trends, drift, periodic variations, and noise modeling
+- **Distributed Telemetry Architecture**: Ground station + Remote sensor nodes (Jetson/flight computers)
+- **Development Testing**: Single-machine mode for FSW development and testing
+- **Real-time Mission Monitoring**: Python-based data viewer with time-series plots
+- **Flight-Grade Timing**: Proper time synchronization using CLOCK_MONOTONIC
+- **Cross-Platform Support**: Works on Linux (flight computers) and macOS (development)
 
-## Architecture
+## Flight Software Architecture
 
 ```
 ┌─────────────────┐    TCP/IP     ┌──────────────────┐
-│   Ground Station │◄─────────────►│   Remote Sensors  │
-│                 │    :2240      │                  │
+│   Ground Station │◄─────────────►│  Flight Computer  │
+│                 │    :2240      │  (Jetson/Linux)   │
 │  ┌─────────────┐ │              │  ┌──────────────┐ │
 │  │ Elodin DB   │ │              │  │ Sensor Gen.  │ │
 │  └─────────────┘ │              │  └──────────────┘ │

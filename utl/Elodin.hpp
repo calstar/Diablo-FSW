@@ -1,6 +1,7 @@
 #ifndef ELODIN_DB_H
 #define ELODIN_DB_H
 #include <cstdint>
+#include <cstring>
 
 #include "TCPSocket.hpp"
 #include "db.hpp"
@@ -90,11 +91,20 @@ static void write_to_elodindb(std::array<uint8_t, 2> packet_id,
         .packet_id = packet_id,
         .request_id = 0};
 
-    // writes the header of the message that we're sending, lethal bug here is
-    // not buffering these headers
-    LocalSock->write_all_elodin(&message_header, sizeof(message_header));
-    // write the actual message
-    write(Message);
+    // FIXED: Create complete packet in single buffer to prevent fragmentation
+    constexpr std::size_t message_size = MessageSize<MessageType>::value;
+    constexpr std::size_t total_size = sizeof(message_header) + message_size;
+    
+    std::array<uint8_t, total_size> complete_packet{};
+    
+    // Copy header to buffer
+    std::memcpy(complete_packet.data(), &message_header, sizeof(message_header));
+    
+    // Serialize message directly into buffer after header
+    Message.serialize(complete_packet.data() + sizeof(message_header));
+    
+    // Send complete packet atomically
+    LocalSock->write_all_elodin(complete_packet.data(), total_size);
 }
 
 /*

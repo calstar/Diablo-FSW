@@ -25,8 +25,10 @@ static std::unordered_set<std::string> addedComponents;
 template <typename T>
 void send(T msg) {
     auto buf = Msg(msg).encode_vec();
-    // Send to local database
-    LocalSock->write_all(buf.data(), buf.size(), "dbConfig.hpp db setup");
+    // Send to local database - use write_all_elodin for consistent buffering
+    LocalSock->write_all_elodin(buf.data(), buf.size());
+    // Immediately flush to prevent fragmentation during config setup
+    LocalSock->flush_elodin();
 }
 
 void cppGenerateDBConfig() {

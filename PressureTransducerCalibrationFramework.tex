@@ -1,0 +1,620 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath, amssymb, amsthm, bm}
+\usepackage{geometry}
+\geometry{margin=1in}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{booktabs}
+\usepackage{siunitx}
+
+\title{Comprehensive Calibration, Bias Modeling, and Bayesian Filtering for Piezoelectric Pressure Transducers in Closed-Loop Control}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+
+Piezoelectric pressure transducers (PTs) produce analog voltages proportional to applied pressure, but calibration is fragile due to mounting torque, mechanical shift, wiring strain, and environmental drift. Current workflows relying on ridge regression with human-in-the-loop gauge readings are insufficient for closed-loop control applications requiring:
+
+\begin{itemize}
+\item Robust uncertainty quantification across transducer variability
+\item Automatic drift detection and bias correction
+\item Extrapolation confidence beyond calibration ranges
+\item Real-time adaptation to mounting and environmental changes
+\end{itemize}
+
+We develop a mathematically rigorous framework unifying Bayesian regression, total least squares (TLS), recursive least squares (RLS), generalized likelihood ratio (GLR) testing, and Extended Kalman Filter (EKF) integration for adaptive online bias correction with full uncertainty propagation.
+
+\section{Physical and Statistical Measurement Model}
+
+\subsection{Complete Measurement Model}
+
+The PT measurement model accounts for multiple sources of uncertainty:
+
+\begin{equation}
+p_{\text{true}} = f(v; \bm{\theta}) + b(t) + \epsilon_{\text{meas}} + \epsilon_{\text{temp}} + \epsilon_{\text{aging}}
+\end{equation}
+
+where:
+\begin{itemize}
+\item $v$ is the transducer voltage
+\item $f(\cdot; \bm{\theta})$ is the deterministic calibration map
+\item $b(t)$ is time-varying bias from mounting and environmental effects
+\item $\epsilon_{\text{meas}} \sim \mathcal{N}(0,\sigma_{\text{meas}}^2)$ is measurement noise
+\item $\epsilon_{\text{temp}} \sim \mathcal{N}(0,\sigma_{\text{temp}}^2)$ is temperature-induced noise
+\item $\epsilon_{\text{aging}} \sim \mathcal{N}(0,\sigma_{\text{aging}}^2)$ is aging/drift noise
+\end{itemize}
+
+\subsection{Robust High-Fidelity Calibration Maps}
+
+\subsubsection{Physically-Informed Polynomial Models}
+For piezoelectric transducers, the calibration map should capture the inherent non-linear behavior:
+\begin{equation}
+f(v; \bm{\theta}) = \theta_0 + \theta_1 v + \theta_2 v^2 + \theta_3 v^3 + \theta_4 \sqrt{v} + \theta_5 \log(1+v)
+\end{equation}
+
+\subsubsection{Environmental-Robust Calibration Map}
+A unified calibration map that intrinsically handles all environmental variations:
+\begin{equation}
+f(v, \mathbf{e}; \bm{\theta}) = \sum_{k=0}^{n} \theta_k \phi_k(v, \mathbf{e})
+\end{equation}
+
+where $\mathbf{e} = [T, \text{humidity}, \text{vibration}, \text{aging\_factor}]^T$ represents environmental state, and $\phi_k$ are robust basis functions:
+\begin{align}
+\phi_0(v, \mathbf{e}) &= 1 \\
+\phi_1(v, \mathbf{e}) &= v \\
+\phi_2(v, \mathbf{e}) &= v^2 + \alpha_1 T v + \alpha_2 \text{humidity} v \\
+\phi_3(v, \mathbf{e}) &= v^3 + \beta_1 T v^2 + \beta_2 \text{vibration} v \\
+\phi_4(v, \mathbf{e}) &= \sqrt{v} + \gamma_1 \text{aging\_factor} \log(v) \\
+\phi_5(v, \mathbf{e}) &= \log(1+v) + \delta_1 T + \delta_2 \text{humidity}
+\end{align}
+
+\subsubsection{Adaptive Spline Calibration}
+For maximum fidelity, use adaptive cubic splines with environmental-dependent knots:
+\begin{equation}
+f(v, \mathbf{e}; \bm{\theta}) = \sum_{j=1}^{J} \theta_j B_j(v, \mathbf{e})
+\end{equation}
+
+where $B_j(v, \mathbf{e})$ are B-spline basis functions with knots that adapt to environmental conditions:
+\begin{equation}
+t_j(\mathbf{e}) = t_{j,\text{nom}} + \mathbf{w}_j^T \mathbf{e}
+\end{equation}
+
+\subsubsection{Physics-Informed Neural Network Calibration}
+For maximum flexibility and fidelity:
+\begin{equation}
+f(v, \mathbf{e}; \bm{\theta}) = \mathcal{N}(v, \mathbf{e}; \bm{\theta}) + \mathcal{P}(v, \mathbf{e})
+\end{equation}
+
+where $\mathcal{N}$ is a neural network and $\mathcal{P}$ enforces physical constraints:
+\begin{equation}
+\mathcal{P}(v, \mathbf{e}) = \lambda_1 \frac{\partial f}{\partial v} + \lambda_2 \frac{\partial^2 f}{\partial v^2} + \lambda_3 \int f \, dv
+\end{equation}
+
+\subsection{Gauge and Reference Uncertainty}
+
+During calibration, reference pressures contain measurement errors:
+\begin{equation}
+p_{\text{obs}} = p_{\text{true}} + \eta_{\text{gauge}} + \eta_{\text{drift}}
+\end{equation}
+
+where $\eta_{\text{gauge}} \sim \mathcal{N}(0, \sigma_{\text{gauge}}^2)$ and $\eta_{\text{drift}} \sim \mathcal{N}(0, \sigma_{\text{drift}}^2)$.
+
+\section{Robust Regression Approaches}
+
+\subsection{Errors-in-Variables and Total Least Squares}
+
+Since both voltage and pressure measurements contain noise, ordinary least squares is biased. Total least squares minimizes orthogonal distances:
+
+\begin{equation}
+\min_{\bm{\theta}} \sum_i \frac{(p_{\text{obs},i} - f(v_i; \bm{\theta}))^2}{\sigma_{\text{total},i}^2}
+\end{equation}
+
+where the total uncertainty is:
+\begin{equation}
+\sigma_{\text{total},i}^2 = \sigma_{\text{gauge}}^2 + \sigma_{\text{drift}}^2 + \sigma_{\text{meas}}^2 + \sigma_{\text{temp}}^2 + \sigma_{\text{aging}}^2 + \sigma_v^2
+\end{equation}
+
+\subsection{Bayesian Regression with Hierarchical Priors}
+
+We employ a hierarchical Bayesian approach to model transducer-to-transducer variability:
+
+\subsubsection{Population-Level Priors}
+\begin{equation}
+\bm{\theta} \sim \mathcal{N}(\bm{\mu}_{\text{pop}}, \Sigma_{\text{pop}})
+\end{equation}
+
+\subsubsection{Individual Transducer Priors}
+For transducer $j$:
+\begin{equation}
+\bm{\theta}^{(j)} | \bm{\theta} \sim \mathcal{N}(\bm{\theta}, \Sigma_{\text{ind}})
+\end{equation}
+
+\subsubsection{Posterior Distribution}
+The posterior for transducer $j$ given calibration data $\mathcal{D}^{(j)}$ is:
+\begin{equation}
+p(\bm{\theta}^{(j)} | \mathcal{D}^{(j)}, \bm{\theta}) \propto p(\mathcal{D}^{(j)} | \bm{\theta}^{(j)}) p(\bm{\theta}^{(j)} | \bm{\theta}) p(\bm{\theta})
+\end{equation}
+
+\subsubsection{Predictive Distributions}
+The predictive distribution for new measurements is:
+\begin{equation}
+p(p|v,\mathcal{D}^{(j)}) = \int p(p|v,\bm{\theta}^{(j)}) p(\bm{\theta}^{(j)} | \mathcal{D}^{(j)}) d\bm{\theta}^{(j)}
+\end{equation}
+
+For Gaussian priors and likelihoods, this yields:
+\begin{equation}
+p(p|v,\mathcal{D}^{(j)}) = \mathcal{N}(\hat{p}, \sigma_{\text{pred}}^2)
+\end{equation}
+
+where:
+\begin{align}
+\hat{p} &= f(v; \hat{\bm{\theta}}^{(j)}) \\
+\sigma_{\text{pred}}^2 &= \sigma_{\text{meas}}^2 + J_{\bm{\theta}} \Sigma_{\bm{\theta}}^{(j)} J_{\bm{\theta}}^T + \sigma_{\text{extrapolation}}^2
+\end{align}
+
+\subsection{Recursive Least Squares with Forgetting}
+
+For online calibration updates:
+\begin{align}
+K_k &= P_{k-1} \phi_k (\lambda + \phi_k^T P_{k-1} \phi_k)^{-1} \\
+\hat{\bm{\theta}}_k &= \hat{\bm{\theta}}_{k-1} + K_k (p_{\text{obs},k} - \phi_k^T \hat{\bm{\theta}}_{k-1}) \\
+P_k &= \lambda^{-1}(P_{k-1} - K_k \phi_k^T P_{k-1}) \\
+\Sigma_{\bm{\theta},k} &= P_k + \Sigma_{\text{forgetting}}
+\end{align}
+
+where $\lambda \in (0,1]$ is the forgetting factor and $\Sigma_{\text{forgetting}}$ accounts for parameter drift.
+
+\section{Bias and Drift Modeling}
+
+\subsection{Unified Environmental Variance Model}
+
+Instead of separate bias terms, we model all environmental variations through a unified variance structure that adapts the calibration map itself:
+
+\subsubsection{Environmental State Vector}
+\begin{equation}
+\mathbf{e} = [T, H, V, A, M]^T
+\end{equation}
+where:
+\begin{itemize}
+\item $T$: Temperature
+\item $H$: Humidity  
+\item $V$: Vibration level
+\item $A$: Aging factor (time-dependent)
+\item $M$: Mounting torque factor
+\end{itemize}
+
+\subsubsection{Adaptive Variance Model}
+The measurement variance adapts to environmental conditions:
+\begin{equation}
+\sigma_{\text{total}}^2(v, \mathbf{e}) = \sigma_{\text{base}}^2 + \sigma_{\text{env}}^2(v, \mathbf{e}) + \sigma_{\text{nonlinear}}^2(v, \mathbf{e})
+\end{equation}
+
+where:
+\begin{align}
+\sigma_{\text{env}}^2(v, \mathbf{e}) &= \mathbf{e}^T \mathbf{Q}_{\text{env}} \mathbf{e} + v^2 \mathbf{e}^T \mathbf{Q}_{\text{interaction}} \mathbf{e} \\
+\sigma_{\text{nonlinear}}^2(v, \mathbf{e}) &= \alpha_1 v^4 + \alpha_2 \|\mathbf{e}\|^2 v^2 + \alpha_3 \|\mathbf{e}\|^4
+\end{align}
+
+\subsubsection{Process Variance Evolution}
+The calibration parameters themselves evolve with environmental conditions:
+\begin{equation}
+\bm{\theta}_{k+1} = \bm{\theta}_k + \mathbf{w}_{\theta,k}(\mathbf{e}_k)
+\end{equation}
+
+where the process noise is environment-dependent:
+\begin{equation}
+\mathbf{w}_{\theta,k}(\mathbf{e}_k) \sim \mathcal{N}(0, \mathbf{Q}_{\theta}(\mathbf{e}_k))
+\end{equation}
+
+with:
+\begin{equation}
+\mathbf{Q}_{\theta}(\mathbf{e}) = \mathbf{Q}_{\theta,\text{base}} + \sum_{i=1}^{n_e} e_i \mathbf{Q}_{\theta,i} + \sum_{i=1}^{n_e} \sum_{j=i}^{n_e} e_i e_j \mathbf{Q}_{\theta,ij}
+\end{equation}
+
+\subsubsection{Residual Bias Model}
+A minimal residual bias term captures effects not captured by the environmental calibration map:
+\begin{equation}
+b_{\text{residual},k+1} = \rho b_{\text{residual},k} + w_b, \quad w_b \sim \mathcal{N}(0, Q_b(\mathbf{e}_k))
+\end{equation}
+
+where:
+\begin{equation}
+Q_b(\mathbf{e}) = Q_{b,\text{base}} \left(1 + \|\mathbf{e}\|^2 / \|\mathbf{e}_{\text{ref}}\|^2\right)
+\end{equation}
+
+\section{Change Detection and Calibration Validation}
+
+\subsection{Generalized Likelihood Ratio Test}
+
+The GLR test evaluates whether new data is consistent with the current calibration:
+
+\begin{equation}
+\Lambda = \frac{\sup_{\bm{\theta}} L(\bm{\theta}; \mathcal{D}_{\text{new}})}{L(\hat{\bm{\theta}}; \mathcal{D}_{\text{new}})}
+\end{equation}
+
+\subsubsection{Windowed GLR Test}
+For a sliding window of size $N$:
+\begin{equation}
+\Lambda_k = \frac{\max_{j \in [k-N+1,k]} \sup_{\bm{\theta}} L(\bm{\theta}; \mathcal{D}_{j:k})}{L(\hat{\bm{\theta}}; \mathcal{D}_{j:k})}
+\end{equation}
+
+\subsubsection{Threshold Selection}
+The threshold $\gamma$ is selected based on desired false alarm rate:
+\begin{equation}
+P(\Lambda > \gamma | H_0) = \alpha
+\end{equation}
+
+\subsection{Cumulative Sum (CUSUM) Test}
+
+For detecting gradual drift:
+\begin{equation}
+S_k = \max(0, S_{k-1} + \log \frac{p(z_k | \hat{\bm{\theta}}_{\text{new}})}{p(z_k | \hat{\bm{\theta}}_{\text{old}})})
+\end{equation}
+
+\subsection{Extrapolation Confidence}
+
+For measurements outside calibration range, we compute extrapolation uncertainty:
+\begin{equation}
+\sigma_{\text{extrapolation}}^2 = \sigma_{\text{model}}^2 + \sigma_{\text{range}}^2
+\end{equation}
+
+where:
+\begin{align}
+\sigma_{\text{model}}^2 &= \sum_{k} \frac{\partial^2 f}{\partial \theta_k^2} \Sigma_{\theta_k} \\
+\sigma_{\text{range}}^2 &= \alpha_{\text{range}} \left(\frac{v - v_{\text{cal,min}}}{v_{\text{cal,max}} - v_{\text{cal,min}}}\right)^2
+\end{align}
+
+\section{EKF Integration for Online Adaptation}
+
+\subsection{State Augmentation}
+
+The EKF state vector includes physical states, calibration parameters, and environmental state:
+\begin{equation}
+\mathbf{x}_k = \begin{bmatrix}
+\mathbf{x}_{\text{phys},k} \\
+\bm{\theta}_k \\
+\mathbf{e}_k \\
+b_{\text{residual},k}
+\end{bmatrix}
+\end{equation}
+
+\subsection{Process Model}
+
+\begin{equation}
+\mathbf{x}_{k+1} = \begin{bmatrix}
+\mathbf{F}_{\text{phys}} & 0 & 0 & 0 \\
+0 & \mathbf{I} & 0 & 0 \\
+0 & 0 & \mathbf{F}_{\text{env}} & 0 \\
+0 & 0 & 0 & \rho
+\end{bmatrix} \mathbf{x}_k + \mathbf{w}_k
+\end{equation}
+
+where the process noise is environment-dependent:
+\begin{equation}
+\mathbf{w}_k \sim \mathcal{N}(0, \mathbf{Q}(\mathbf{e}_k))
+\end{equation}
+
+with:
+\begin{equation}
+\mathbf{Q}(\mathbf{e}) = \begin{bmatrix}
+\mathbf{Q}_{\text{phys}} & 0 & 0 & 0 \\
+0 & \mathbf{Q}_{\theta}(\mathbf{e}) & 0 & 0 \\
+0 & 0 & \mathbf{Q}_{\text{env}} & 0 \\
+0 & 0 & 0 & Q_b(\mathbf{e})
+\end{bmatrix}
+\end{equation}
+
+\subsection{Measurement Model}
+
+\begin{equation}
+h(\mathbf{x}, v) = f(v, \mathbf{e}; \bm{\theta}) + b_{\text{residual}}
+\end{equation}
+
+\subsection{Jacobian Computation}
+
+\begin{equation}
+\mathbf{H} = \frac{\partial h}{\partial \mathbf{x}} = \begin{bmatrix}
+\frac{\partial h}{\partial \mathbf{x}_{\text{phys}}} & \frac{\partial f}{\partial \bm{\theta}} & \frac{\partial f}{\partial \mathbf{e}} & 1
+\end{bmatrix}
+\end{equation}
+
+where:
+\begin{align}
+\frac{\partial f}{\partial \bm{\theta}} &= \begin{bmatrix} \phi_0(v, \mathbf{e}) & \phi_1(v, \mathbf{e}) & \cdots & \phi_n(v, \mathbf{e}) \end{bmatrix} \\
+\frac{\partial f}{\partial \mathbf{e}} &= \sum_{k=0}^{n} \theta_k \frac{\partial \phi_k}{\partial \mathbf{e}}
+\end{align}
+
+\subsection{Adaptive Measurement Covariance}
+
+\begin{equation}
+\mathbf{R}_k = \sigma_{\text{total}}^2(v_k, \mathbf{e}_k) + \mathbf{J}_{\bm{\theta}} \Sigma_{\bm{\theta},k} \mathbf{J}_{\bm{\theta}}^T + \mathbf{J}_{\mathbf{e}} \Sigma_{\mathbf{e},k} \mathbf{J}_{\mathbf{e}}^T
+\end{equation}
+
+\section{Robustness Across Transducers}
+
+\subsection{Population-Based Calibration}
+
+\subsubsection{Multi-Transducer Calibration}
+Given calibration data from $M$ transducers:
+\begin{equation}
+\mathcal{D}_{\text{pop}} = \{\mathcal{D}^{(1)}, \mathcal{D}^{(2)}, \ldots, \mathcal{D}^{(M)}\}
+\end{equation}
+
+The population-level posterior is:
+\begin{equation}
+p(\bm{\theta}, \Sigma_{\text{ind}} | \mathcal{D}_{\text{pop}}) \propto \prod_{j=1}^M \int p(\mathcal{D}^{(j)} | \bm{\theta}^{(j)}) p(\bm{\theta}^{(j)} | \bm{\theta}, \Sigma_{\text{ind}}) d\bm{\theta}^{(j)}
+\end{equation}
+
+\subsubsection{Transfer Learning}
+For a new transducer with limited data, we use the population prior:
+\begin{equation}
+p(\bm{\theta}^{(j)} | \mathcal{D}^{(j)}, \mathcal{D}_{\text{pop}}) \propto p(\mathcal{D}^{(j)} | \bm{\theta}^{(j)}) p(\bm{\theta}^{(j)} | \hat{\bm{\theta}}_{\text{pop}}, \hat{\Sigma}_{\text{ind}})
+\end{equation}
+
+\subsection{Uncertainty Propagation}
+
+The total measurement uncertainty includes:
+\begin{align}
+\sigma_{\text{total}}^2 &= \sigma_{\text{measurement}}^2 + \sigma_{\text{calibration}}^2 + \sigma_{\text{bias}}^2 + \sigma_{\text{extrapolation}}^2 \\
+&= \sigma_{\text{meas}}^2 + \mathbf{J}_{\bm{\theta}} \Sigma_{\bm{\theta}} \mathbf{J}_{\bm{\theta}}^T + \Sigma_{b} + \sigma_{\text{extrapolation}}^2
+\end{align}
+
+\section{High-Fidelity Calibration Map Design}
+
+\subsection{Design Principles for Maximum Fidelity}
+
+\subsubsection{Physical Constraint Integration}
+To achieve maximum fidelity, the calibration map must respect physical constraints:
+\begin{equation}
+\frac{\partial f}{\partial v} > 0 \quad \text{(monotonicity)}
+\end{equation}
+\begin{equation}
+\frac{\partial^2 f}{\partial v^2} \geq 0 \quad \text{(convexity for piezoelectric response)}
+\end{equation}
+\begin{equation}
+\lim_{v \to 0} f(v, \mathbf{e}; \bm{\theta}) = p_{\text{offset}} \quad \text{(zero-voltage offset)}
+\end{equation}
+
+\subsubsection{Multi-Resolution Calibration}
+Use hierarchical calibration with multiple resolution levels:
+\begin{equation}
+f(v, \mathbf{e}; \bm{\theta}) = f_{\text{coarse}}(v, \mathbf{e}; \bm{\theta}_{\text{coarse}}) + f_{\text{fine}}(v, \mathbf{e}; \bm{\theta}_{\text{fine}})
+\end{equation}
+
+where:
+\begin{align}
+f_{\text{coarse}}(v, \mathbf{e}; \bm{\theta}_{\text{coarse}}) &= \sum_{k=0}^{3} \theta_k \phi_k^{\text{coarse}}(v, \mathbf{e}) \\
+f_{\text{fine}}(v, \mathbf{e}; \bm{\theta}_{\text{fine}}) &= \sum_{k=4}^{n} \theta_k \phi_k^{\text{fine}}(v, \mathbf{e})
+\end{align}
+
+\subsubsection{Adaptive Basis Function Selection}
+Automatically select optimal basis functions using information criteria:
+\begin{equation}
+\text{AIC} = 2k - 2\ln(L) + \frac{2k(k+1)}{N-k-1}
+\end{equation}
+
+where $k$ is the number of parameters and $L$ is the likelihood.
+
+\subsection{Environmental Robustness Enhancement}
+
+\subsubsection{Cross-Environmental Calibration}
+Calibrate across multiple environmental conditions simultaneously:
+\begin{equation}
+\min_{\bm{\theta}} \sum_{j=1}^{M} \sum_{i=1}^{N_j} \frac{(p_{\text{obs},ij} - f(v_{ij}, \mathbf{e}_j; \bm{\theta}))^2}{\sigma_{\text{total},ij}^2}
+\end{equation}
+
+where $M$ is the number of environmental conditions and $N_j$ is the number of measurements in condition $j$.
+
+\subsubsection{Transfer Learning Between Environments}
+Use domain adaptation techniques to transfer calibration knowledge:
+\begin{equation}
+f(v, \mathbf{e}_{\text{new}}; \bm{\theta}) = f(v, \mathbf{e}_{\text{ref}}; \bm{\theta}) + \Delta f(\mathbf{e}_{\text{new}} - \mathbf{e}_{\text{ref}}; \bm{\theta}_{\Delta})
+\end{equation}
+
+\subsection{Variance Model Sophistication}
+
+\subsubsection{Heteroscedastic Variance Modeling}
+Model variance as a function of both voltage and environmental conditions:
+\begin{equation}
+\log \sigma^2(v, \mathbf{e}) = \beta_0 + \beta_1 v + \beta_2 v^2 + \mathbf{e}^T \bm{\beta}_{\text{env}} + \mathbf{e}^T \mathbf{B}_{\text{interaction}} \mathbf{e}
+\end{equation}
+
+\subsubsection{Non-parametric Variance Estimation}
+Use Gaussian Process regression for variance modeling:
+\begin{equation}
+\sigma^2(v, \mathbf{e}) \sim \mathcal{GP}(\mu_{\sigma^2}(v, \mathbf{e}), k_{\sigma^2}((v, \mathbf{e}), (v', \mathbf{e}')))
+\end{equation}
+
+with kernel:
+\begin{equation}
+k_{\sigma^2}((v, \mathbf{e}), (v', \mathbf{e}')) = k_v(v, v') \times k_{\mathbf{e}}(\mathbf{e}, \mathbf{e}')
+\end{equation}
+
+\section{Practical Implementation Workflow}
+
+\subsection{High-Fidelity Calibration Phase}
+
+\begin{algorithm}
+\caption{Environmental-Robust Bayesian Calibration with Adaptive TLS}
+\begin{algorithmic}[1]
+\State \textbf{Input:} Calibration data $\{(v_i, p_{\text{obs},i}, \mathbf{e}_i)\}_{i=1}^N$
+\State \textbf{Input:} Environmental uncertainties $\{\sigma_{\text{env},i}\}$
+\State \textbf{Input:} Population priors $\bm{\mu}_{\text{pop}}, \Sigma_{\text{pop}}$
+
+\State Initialize $\bm{\theta}^{(0)} = \bm{\mu}_{\text{pop}}$, $\Sigma_{\bm{\theta}}^{(0)} = \Sigma_{\text{pop}}$
+\State Initialize environmental variance parameters $\mathbf{Q}_{\text{env}}^{(0)}, \mathbf{Q}_{\text{interaction}}^{(0)}$
+
+\For{$k = 1$ to $\text{max\_iterations}$}
+    \State \textbf{Step 1:} Update environmental variance model
+    \State $\sigma_{\text{total},i}^2 = \sigma_{\text{base}}^2 + \mathbf{e}_i^T \mathbf{Q}_{\text{env}}^{(k-1)} \mathbf{e}_i + v_i^2 \mathbf{e}_i^T \mathbf{Q}_{\text{interaction}}^{(k-1)} \mathbf{e}_i$
+    \State $\sigma_{\text{total},i}^2 \mathrel{+}= \alpha_1 v_i^4 + \alpha_2 \|\mathbf{e}_i\|^2 v_i^2 + \alpha_3 \|\mathbf{e}_i\|^4$
+    
+    \State \textbf{Step 2:} Solve robust TLS with environmental calibration map
+    \State $\min_{\bm{\theta}} \sum_i \frac{(p_{\text{obs},i} - f(v_i, \mathbf{e}_i; \bm{\theta}))^2}{\sigma_{\text{total},i}^2}$
+    
+    \State \textbf{Step 3:} Update calibration parameter posterior
+    \State $\mathbf{H}_i = \frac{\partial f}{\partial \bm{\theta}}|_{v_i, \mathbf{e}_i, \bm{\theta}^{(k-1)}}$
+    \State $\Sigma_{\bm{\theta}}^{(k)} = \left(\Sigma_{\bm{\theta}}^{(k-1)^{-1}} + \sum_i \frac{\mathbf{H}_i^T \mathbf{H}_i}{\sigma_{\text{total},i}^2}\right)^{-1}$
+    \State $\bm{\theta}^{(k)} = \Sigma_{\bm{\theta}}^{(k)} \left(\Sigma_{\bm{\theta}}^{(k-1)^{-1}} \bm{\theta}^{(k-1)} + \sum_i \frac{\mathbf{H}_i^T (p_{\text{obs},i} - f(v_i, \mathbf{e}_i; \bm{\theta}^{(k-1)}))}{\sigma_{\text{total},i}^2}\right)$
+    
+    \State \textbf{Step 4:} Update environmental variance parameters
+    \State Estimate $\mathbf{Q}_{\text{env}}^{(k)}, \mathbf{Q}_{\text{interaction}}^{(k)}$ from residuals
+    \State $\alpha_1^{(k)}, \alpha_2^{(k)}, \alpha_3^{(k)} \leftarrow$ nonlinear variance fitting
+    
+    \If{$\|\bm{\theta}^{(k)} - \bm{\theta}^{(k-1)}\| < \epsilon$ and $\|\mathbf{Q}_{\text{env}}^{(k)} - \mathbf{Q}_{\text{env}}^{(k-1)}\| < \epsilon$}
+        \State \textbf{break}
+    \EndIf
+\EndFor
+
+\State \textbf{Step 5:} Validate calibration robustness
+\State Test extrapolation confidence across environmental ranges
+\State Compute cross-validation metrics
+\State Assess population-level consistency
+
+\State \textbf{Output:} $\hat{\bm{\theta}}$, $\Sigma_{\bm{\theta}}$, $\hat{\mathbf{Q}}_{\text{env}}$, $\hat{\mathbf{Q}}_{\text{interaction}}$, calibration quality metrics
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Deployment Phase}
+
+\begin{algorithm}
+\caption{Online Environmental-Adaptive EKF with Change Detection}
+\begin{algorithmic}[1]
+\State \textbf{Input:} Calibration parameters $\hat{\bm{\theta}}$, $\Sigma_{\bm{\theta}}$
+\State \textbf{Input:} Environmental variance model $\hat{\mathbf{Q}}_{\text{env}}$, $\hat{\mathbf{Q}}_{\text{interaction}}$
+\State \textbf{Input:} Initial environmental state $\hat{\mathbf{e}}_0$, $\Sigma_{\mathbf{e},0}$
+
+\State Initialize EKF state: $\mathbf{x}_0 = [\mathbf{x}_{\text{phys},0}, \hat{\bm{\theta}}, \hat{\mathbf{e}}_0, 0]^T$
+\State Initialize EKF covariance: $\mathbf{P}_0 = \text{blkdiag}(\mathbf{P}_{\text{phys},0}, \Sigma_{\bm{\theta}}, \Sigma_{\mathbf{e},0}, \Sigma_{b,0})$
+
+\For{each measurement $(v_k, p_{\text{obs},k}, \mathbf{e}_{\text{sensor},k})$}
+    \State \textbf{Environmental State Update:}
+    \State $\hat{\mathbf{e}}_{k|k-1} = \mathbf{F}_{\text{env}} \hat{\mathbf{e}}_{k-1|k-1}$
+    \State $\Sigma_{\mathbf{e},k|k-1} = \mathbf{F}_{\text{env}} \Sigma_{\mathbf{e},k-1|k-1} \mathbf{F}_{\text{env}}^T + \mathbf{Q}_{\text{env}}$
+    
+    \State \textbf{Prediction:}
+    \State $\hat{\mathbf{x}}_{k|k-1} = \mathbf{F} \hat{\mathbf{x}}_{k-1|k-1}$
+    \State $\mathbf{Q}_k = \mathbf{Q}(\hat{\mathbf{e}}_{k|k-1})$ \Comment{Environment-dependent process noise}
+    \State $\mathbf{P}_{k|k-1} = \mathbf{F} \mathbf{P}_{k-1|k-1} \mathbf{F}^T + \mathbf{Q}_k$
+    
+    \State \textbf{Adaptive Variance Computation:}
+    \State $\sigma_{\text{total},k}^2 = \sigma_{\text{base}}^2 + \hat{\mathbf{e}}_{k|k-1}^T \hat{\mathbf{Q}}_{\text{env}} \hat{\mathbf{e}}_{k|k-1}$
+    \State $\sigma_{\text{total},k}^2 \mathrel{+}= v_k^2 \hat{\mathbf{e}}_{k|k-1}^T \hat{\mathbf{Q}}_{\text{interaction}} \hat{\mathbf{e}}_{k|k-1}$
+    \State $\sigma_{\text{total},k}^2 \mathrel{+}= \alpha_1 v_k^4 + \alpha_2 \|\hat{\mathbf{e}}_{k|k-1}\|^2 v_k^2 + \alpha_3 \|\hat{\mathbf{e}}_{k|k-1}\|^4$
+    
+    \State \textbf{GLR Test:}
+    \State Compute $\Lambda_k$ using sliding window with environmental-robust likelihood
+    \If{$\Lambda_k > \gamma$}
+        \State Trigger recalibration or increase uncertainty
+        \State $\Sigma_{\bm{\theta},k|k-1} \leftarrow \Sigma_{\bm{\theta},k|k-1} + \Delta \Sigma_{\text{recal}}$
+    \EndIf
+    
+    \State \textbf{Update:}
+    \State $\mathbf{H}_k = \frac{\partial h}{\partial \mathbf{x}}|_{\hat{\mathbf{x}}_{k|k-1}}$
+    \State $\mathbf{R}_k = \sigma_{\text{total},k}^2 + \mathbf{J}_{\bm{\theta}} \Sigma_{\bm{\theta},k|k-1} \mathbf{J}_{\bm{\theta}}^T + \mathbf{J}_{\mathbf{e}} \Sigma_{\mathbf{e},k|k-1} \mathbf{J}_{\mathbf{e}}^T$
+    \State $\mathbf{K}_k = \mathbf{P}_{k|k-1} \mathbf{H}_k^T (\mathbf{H}_k \mathbf{P}_{k|k-1} \mathbf{H}_k^T + \mathbf{R}_k)^{-1}$
+    \State $\hat{\mathbf{x}}_{k|k} = \hat{\mathbf{x}}_{k|k-1} + \mathbf{K}_k (p_{\text{obs},k} - h(\hat{\mathbf{x}}_{k|k-1}, v_k))$
+    \State $\mathbf{P}_{k|k} = (\mathbf{I} - \mathbf{K}_k \mathbf{H}_k) \mathbf{P}_{k|k-1}$
+    
+    \State \textbf{Output:} $\hat{p}_k = f(v_k, \hat{\mathbf{e}}_{k|k}; \hat{\bm{\theta}}_{k|k}) + \hat{b}_{k|k}$, $\sigma_{p,k}^2$
+\EndFor
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Quality Metrics and Validation}
+
+\subsubsection{Calibration Quality Metrics}
+\begin{itemize}
+\item \textbf{Normalized Root Mean Square Error (NRMSE):}
+\begin{equation}
+\text{NRMSE} = \frac{\sqrt{\frac{1}{N}\sum_{i=1}^N (p_{\text{obs},i} - \hat{p}_i)^2}}{\max(p_{\text{obs}}) - \min(p_{\text{obs}})}
+\end{equation}
+
+\item \textbf{Uncertainty Calibration:}
+\begin{equation}
+\text{Coverage} = \frac{1}{N}\sum_{i=1}^N \mathbf{1}[|p_{\text{obs},i} - \hat{p}_i| \leq k\sigma_{p,i}]
+\end{equation}
+
+\item \textbf{Extrapolation Confidence:}
+\begin{equation}
+\text{Confidence} = \exp\left(-\frac{\sigma_{\text{extrapolation}}^2}{2\sigma_{\text{cal}}^2}\right)
+\end{equation}
+\end{itemize}
+
+\section{Implementation Considerations}
+
+\subsection{Computational Efficiency}
+
+\subsubsection{Sparse Matrix Operations}
+For large-scale problems, exploit sparsity in $\Sigma_{\bm{\theta}}$ and $\mathbf{Q}$.
+
+\subsubsection{Parallel Processing}
+Calibration of multiple transducers can be parallelized across cores.
+
+\subsubsection{Incremental Updates}
+Use rank-one updates for covariance matrices to avoid full recomputation.
+
+\subsection{Numerical Stability}
+
+\subsubsection{Regularization}
+Add regularization terms to prevent overfitting:
+\begin{equation}
+L_{\text{reg}} = L_{\text{data}} + \lambda_1 \|\bm{\theta}\|_2^2 + \lambda_2 \|\bm{\theta}\|_1
+\end{equation}
+
+\subsubsection{Condition Number Monitoring}
+Monitor condition numbers of covariance matrices and apply regularization when needed.
+
+\subsection{Real-Time Constraints}
+
+\subsubsection{Fixed-Point Implementation}
+For embedded systems, consider fixed-point arithmetic with careful scaling.
+
+\subsubsection{Adaptive Update Rates}
+Adjust EKF update frequency based on system dynamics and computational load.
+
+\section{Validation and Testing Framework}
+
+\subsection{Monte Carlo Validation}
+
+\subsubsection{Bootstrap Resampling}
+Generate confidence intervals using bootstrap resampling of calibration data.
+
+\subsubsection{Cross-Validation}
+Use k-fold cross-validation to assess generalization performance.
+
+\subsection{Synthetic Data Testing}
+
+Generate synthetic data with known parameters to validate algorithm performance:
+\begin{equation}
+v_{\text{syn}} = f^{-1}(p_{\text{true}} + \text{bias} + \epsilon_{\text{meas}}; \bm{\theta}_{\text{true}})
+\end{equation}
+
+\subsection{Field Testing Protocol}
+
+\begin{enumerate}
+\item Bench calibration with multiple reference standards
+\item Environmental stress testing (temperature, vibration, pressure cycling)
+\item Long-term drift monitoring
+\item Transducer-to-transducer variability assessment
+\item Real-world deployment validation
+\end{enumerate}
+
+\section{Conclusion}
+
+This comprehensive framework addresses the critical limitations of current pressure transducer calibration methods by providing:
+
+\begin{itemize}
+\item \textbf{Mathematical Rigor:} Bayesian uncertainty quantification with full covariance propagation
+\item \textbf{Robustness:} Population-based calibration with transfer learning capabilities
+\item \textbf{Adaptability:} Real-time bias correction with change detection
+\item \textbf{Extrapolation Safety:} Confidence bounds for out-of-range measurements
+\item \textbf{Practical Implementation:} Detailed algorithms and quality metrics
+\end{itemize}
+
+The integration of TLS, Bayesian regression, RLS, GLR testing, and EKF filtering creates a mathematically robust system ensuring fidelity of PT measurements for closed-loop control applications. The framework's ability to encode bench calibrations as distributions rather than point values, combined with online filtering that tracks drift while guarding against invalid calibration, provides the reliability needed for critical control systems.
+
+\end{document}

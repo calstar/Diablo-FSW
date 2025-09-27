@@ -43,14 +43,22 @@ set(FSW_SOURCES
     # Communication system sources
     FSW/comms/src/PacketProtocol.cpp
     FSW/comms/src/CommunicationProtocol.cpp
+    FSW/comms/src/ESP32SerialHandler.cpp
+    FSW/comms/src/ESP32ConfigParser.cpp
     # Calibration system sources
     FSW/calibration/src/SensorCalibration.cpp
     FSW/calibration/src/EncoderCalibration.cpp
     # Navigation system sources
     FSW/nav/src/SensorFusion.cpp
     FSW/nav/src/EKFNavigation.cpp
+    FSW/nav/src/ObservationMatrix.cpp
     # State management sources
     FSW/state/src/StateMachine.cpp
+    # ESP32 integration examples
+    FSW/src/esp32_integration_example.cpp
+    FSW/src/pt_integration_example.cpp
+    FSW/src/raw_voltage_pt_example.cpp
+    FSW/src/configurable_pt_example.cpp
 )
 
 # Source files for utilities

@@ -7,47 +7,61 @@
 #include "../../external/shared/message_factory/MessageFactory.hpp"
 
 /**
- * @brief Pressure Transducer Message
+ * @brief PT Location enumeration for engine system
+ */
+enum class PTLocation {
+    PRESSURANT_TANK = 0,    // Pressurant tank PT
+    KERO_INLET = 1,         // Kero Inlet PT
+    KERO_OUTLET = 2,        // Kero Outlet PT
+    LOX_INLET = 3,          // Lox Inlet PT
+    LOX_OUTLET = 4,         // Lox Outlet PT
+    INJECTOR = 5,           // Injector PT
+    CHAMBER_WALL_1 = 6,     // Chamber Wall PT #1
+    CHAMBER_WALL_2 = 7,     // Chamber Wall PT #2
+    NOZZLE_EXIT = 8,        // Nozzle Exit PT
+    UNKNOWN = 9             // Unknown/Unused
+};
+
+/**
+ * @brief Pressure Transducer Message - Raw voltage system
  *
- * Contains pressure measurements from various PT sensors with calibration data
+ * Contains raw voltage readings from PT sensors (calibration applied later)
  */
 using PTMessage =
-    MessageFactory<double,     // (0) timestamp (s) - timestamp
-                   uint8_t,    // (1) sensor_id - PT sensor identifier
-                   double,     // (2) raw_voltage (V) - raw voltage reading
-                   double,     // (3) pressure (Pa) - calibrated pressure
-                   double,     // (4) pressure_uncertainty (Pa) - measurement uncertainty
-                   double,     // (5) temperature (°C) - sensor temperature
-                   double,     // (6) calibration_quality (0-1) - calibration quality
-                   bool,       // (7) calibration_valid - calibration validity
-                   double,     // (8) drift_detected - drift detection flag
-                   uint8_t,    // (9) sensor_health - sensor health status
-                   double,     // (10) environmental_factor - environmental correction factor
-                   uint64_t>;  // (11) time_monotonic (ns) - monotonic timestamp
+    MessageFactory<uint64_t,   // (0) timestamp_ns - monotonic timestamp in nanoseconds
+                   uint8_t,    // (1) sensor_id - PT sensor identifier (0-8 for 9 PTs)
+                   double,     // (2) raw_voltage_v - raw voltage reading in Volts
+                   uint8_t>;   // (3) pt_location - PT location enum value
 
-// Function to set PT sensor measurements
-static void set_pt_measurement(PTMessage& message, double timestamp, uint8_t sensor_id,
-                               double raw_voltage, double pressure, double pressure_uncertainty,
-                               double temperature, double calibration_quality,
-                               bool calibration_valid, double drift_detected, uint8_t sensor_health,
-                               double environmental_factor, uint64_t time_monotonic) {
-    message.setField<0>(timestamp);
+// Function to set PT sensor measurements with raw voltage
+static void set_pt_measurement(PTMessage& message, uint64_t timestamp_ns, uint8_t sensor_id, 
+                               double raw_voltage_v, PTLocation location) {
+    message.setField<0>(timestamp_ns);
     message.setField<1>(sensor_id);
-    message.setField<2>(raw_voltage);
-    message.setField<3>(pressure);
-    message.setField<4>(pressure_uncertainty);
-    message.setField<5>(temperature);
-    message.setField<6>(calibration_quality);
-    message.setField<7>(calibration_valid);
-    message.setField<8>(drift_detected);
-    message.setField<9>(sensor_health);
-    message.setField<10>(environmental_factor);
-    message.setField<11>(time_monotonic);
+    message.setField<2>(raw_voltage_v);
+    message.setField<3>(static_cast<uint8_t>(location));
+}
+
+// Helper function to get PT location name
+static std::string getPTLocationName(PTLocation location) {
+    switch (location) {
+        case PTLocation::PRESSURANT_TANK: return "Pressurant Tank";
+        case PTLocation::KERO_INLET: return "Kero Inlet";
+        case PTLocation::KERO_OUTLET: return "Kero Outlet";
+        case PTLocation::LOX_INLET: return "Lox Inlet";
+        case PTLocation::LOX_OUTLET: return "Lox Outlet";
+        case PTLocation::INJECTOR: return "Injector";
+        case PTLocation::CHAMBER_WALL_1: return "Chamber Wall #1";
+        case PTLocation::CHAMBER_WALL_2: return "Chamber Wall #2";
+        case PTLocation::NOZZLE_EXIT: return "Nozzle Exit";
+        case PTLocation::UNKNOWN: return "Unknown";
+        default: return "Invalid";
+    }
 }
 
 static PTMessage generateTestMessagePT() {
     PTMessage message;
-    set_pt_measurement(message, 0.0, 1, 2.5, 101325.0, 100.0, 25.0, 0.95, true, 0.0, 0, 1.0, 0);
+    set_pt_measurement(message, 0, 0, 2.5, PTLocation::PRESSURANT_TANK); // 2.5V raw reading
     return message;
 }
 

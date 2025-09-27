@@ -48,6 +48,9 @@ set(FSW_SOURCES
     # Calibration system sources
     FSW/calibration/src/SensorCalibration.cpp
     FSW/calibration/src/EncoderCalibration.cpp
+    FSW/calibration/src/PTCalibrationFramework.cpp
+    FSW/calibration/src/SmartCalibrationSystem.cpp
+    FSW/calibration/src/EnvironmentalRobustCalibration.cpp
     # Navigation system sources
     FSW/nav/src/SensorFusion.cpp
     FSW/nav/src/EKFNavigation.cpp
@@ -59,6 +62,9 @@ set(FSW_SOURCES
     FSW/src/pt_integration_example.cpp
     FSW/src/raw_voltage_pt_example.cpp
     FSW/src/configurable_pt_example.cpp
+    FSW/src/pt_calibration_example.cpp
+    FSW/src/complete_calibration_pipeline.cpp
+    FSW/src/paper_algorithm_pipeline.cpp
 )
 
 # Source files for utilities

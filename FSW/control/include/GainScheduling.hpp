@@ -181,8 +181,8 @@ public:
     };
 
     struct TrainingData {
-        OperatingPoint operating_point;
-        PIDGains gains;
+        GainScheduling::OperatingPoint operating_point;
+        GainScheduling::PIDGains gains;
         double performance_index;
         std::chrono::steady_clock::time_point timestamp;
     };
@@ -192,7 +192,7 @@ public:
 
     bool initialize(const MLConfig& config);
     void addTrainingData(const TrainingData& data);
-    PIDGains predictGains(const OperatingPoint& op_point) const;
+    GainScheduling::PIDGains predictGains(const GainScheduling::OperatingPoint& op_point) const;
 
     bool trainModel();
     bool retrainModel();
@@ -243,7 +243,7 @@ public:
     };
 
     struct OptimizationResult {
-        PIDGains optimized_gains;
+        GainScheduling::PIDGains optimized_gains;
         double objective_value;
         size_t iterations_completed;
         bool converged;
@@ -255,15 +255,15 @@ public:
     ~GainOptimizer();
 
     bool initialize(const OptimizationConfig& config);
-    OptimizationResult optimizeGains(ControlLoop control_loop, const OperatingPoint& op_point,
-                                     const PIDGains& initial_gains);
+    OptimizationResult optimizeGains(GainScheduling::ControlLoop control_loop, const GainScheduling::OperatingPoint& op_point,
+                                     const GainScheduling::PIDGains& initial_gains);
 
     OptimizationConfig getConfig() const;
     bool updateConfig(const OptimizationConfig& config);
 
 private:
-    double evaluateObjective(const PIDGains& gains, const OperatingPoint& op_point) const;
-    bool checkConstraints(const PIDGains& gains) const;
+    double evaluateObjective(const GainScheduling::PIDGains& gains, const GainScheduling::OperatingPoint& op_point) const;
+    bool checkConstraints(const GainScheduling::PIDGains& gains) const;
 
     OptimizationConfig config_;
     std::mutex config_mutex_;

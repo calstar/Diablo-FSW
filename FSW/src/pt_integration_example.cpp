@@ -17,9 +17,9 @@
 #include <vector>
 #include <map>
 
-#include "comms/include/ESP32SerialHandler.hpp"
-#include "nav/include/PTObservationMatrix.hpp"
-#include "comms/include/Timer.hpp"
+#include "ESP32SerialHandler.hpp"
+#include "PTObservationMatrix.hpp"
+#include "Timer.hpp"
 
 class PTIntegrationExample {
 private:
@@ -43,8 +43,8 @@ public:
         
         // Register callback for PT sensor data
         esp32_handler_->registerPTCallback(
-            [this](uint8_t sensor_id, double pressure_pa, uint64_t timestamp) {
-                this->onPTData(sensor_id, pressure_pa, timestamp);
+            [this](uint8_t sensor_id, double raw_voltage_v, uint64_t timestamp, uint8_t pt_location) {
+                this->onPTData(sensor_id, raw_voltage_v, timestamp, pt_location);
             }
         );
     }
@@ -98,9 +98,9 @@ public:
     }
 
 private:
-    void onPTData(uint8_t sensor_id, double pressure_pa, uint64_t timestamp) {
+    void onPTData(uint8_t sensor_id, double raw_voltage_v, uint64_t timestamp, uint8_t pt_location) {
         std::cout << "Received PT data - Sensor " << static_cast<int>(sensor_id) 
-                  << ": " << pressure_pa << " Pa" << std::endl;
+                  << ": " << raw_voltage_v << " V (Location: " << static_cast<int>(pt_location) << ")" << std::endl;
     }
     
     void processingLoop() {

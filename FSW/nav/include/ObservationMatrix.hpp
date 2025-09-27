@@ -7,10 +7,10 @@
 #include <Eigen/Dense>
 #include <cstdint>
 
-#include "../comms/include/PTMessage.hpp"
-#include "../comms/include/IMUMessage.hpp"
-#include "../comms/include/BarometerMessage.hpp"
-#include "../comms/include/GPSMessage.hpp"
+#include "PTMessage.hpp"
+#include "IMUMessage.hpp"
+#include "BarometerMessage.hpp"
+#include "GPSMessage.hpp"
 
 /**
  * @brief Types of sensors that can be used in observation matrices
@@ -115,8 +115,8 @@ public:
      * @param gps_position_messages Vector of GPS position messages
      * @param gps_velocity_messages Vector of GPS velocity messages
      */
-    void addGPSSensors(const std::vector<std::shared_ptr<GPSMessage>>& gps_position_messages,
-                      const std::vector<std::shared_ptr<GPSMessage>>& gps_velocity_messages);
+    void addGPSSensors(const std::vector<std::shared_ptr<GPSPositionMessage>>& gps_position_messages,
+                      const std::vector<std::shared_ptr<GPSVelocityMessage>>& gps_velocity_messages);
     
     /**
      * @brief Add custom sensor measurement
@@ -216,7 +216,7 @@ private:
      * @param state_mapping Map of state indices to sensor types
      * @return Observation matrix
      */
-    Eigen::MatrixXd buildObservationMatrix(
+    Eigen::MatrixXd buildObservationMatrixOnly(
         size_t state_vector_size,
         const std::map<size_t, SensorType>& state_mapping);
     
@@ -262,8 +262,10 @@ private:
      * @param use_velocity Whether to extract velocity data
      * @return Vector of sensor measurements
      */
-    std::vector<SensorMeasurement> convertGPSMessage(
-        const GPSMessage& gps_message, bool use_position, bool use_velocity);
+    std::vector<SensorMeasurement> convertGPSPositionMessage(
+        const GPSPositionMessage& gps_message, bool use_position);
+    std::vector<SensorMeasurement> convertGPSVelocityMessage(
+        const GPSVelocityMessage& gps_message, bool use_velocity);
     
     /**
      * @brief Calculate measurement uncertainty

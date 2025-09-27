@@ -9,7 +9,7 @@
 
 #include "PTCalibrationFramework.hpp"
 #include "PTCalibrationChangeDetection.hpp"
-#include "comms/include/PTMessage.hpp"
+#include "PTMessage.hpp"
 
 /**
  * @brief Calibration procedure configuration

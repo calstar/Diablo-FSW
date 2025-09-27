@@ -233,7 +233,7 @@ public:
     MPCSolver();
     ~MPCSolver();
 
-    bool initialize(const MPCConfig& config);
+    bool initialize(const OptimalController::MPCConfig& config);
     OptimizationResult solve(const Eigen::VectorXd& current_state,
                              const Eigen::VectorXd& reference_trajectory, const Eigen::MatrixXd& A,
                              const Eigen::MatrixXd& B);
@@ -245,7 +245,7 @@ private:
                                const Eigen::MatrixXd& A_eq, const Eigen::VectorXd& b_eq,
                                Eigen::VectorXd& solution);
 
-    MPCConfig config_;
+    OptimalController::MPCConfig config_;
     Eigen::MatrixXd Q_bar_, R_bar_, S_bar_;  // Augmented weighting matrices
     Eigen::MatrixXd A_bar_, B_bar_;          // Augmented system matrices
     Eigen::MatrixXd G_, g_;                  // Constraint matrices

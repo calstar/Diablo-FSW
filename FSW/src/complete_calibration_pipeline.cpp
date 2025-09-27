@@ -15,12 +15,13 @@
 #include <memory>
 #include <signal.h>
 #include <atomic>
+#include <iomanip>
 
-#include "calibration/include/PTCalibrationFramework.hpp"
-#include "calibration/include/SmartCalibrationSystem.hpp"
-#include "comms/include/ESP32SerialHandler.hpp"
-#include "comms/include/ESP32ConfigParser.hpp"
-#include "comms/include/PTMessage.hpp"
+#include "PTCalibrationFramework.hpp"
+#include "SmartCalibrationSystem.hpp"
+#include "ESP32SerialHandler.hpp"
+#include "ESP32ConfigParser.hpp"
+#include "PTMessage.hpp"
 
 class CompleteCalibrationPipeline {
 private:

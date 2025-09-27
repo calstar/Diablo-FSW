@@ -6,6 +6,7 @@
 #include <Eigen/Core>
 #include <Eigen/Dense>
 #include <chrono>
+#include <deque>
 
 #include "PTCalibrationFramework.hpp"
 
@@ -174,6 +175,7 @@ public:
         const EnvironmentalVarianceModel& environmental_variance_model,
         const EnvironmentalState& initial_environmental_state,
         const Eigen::MatrixXd& initial_environmental_covariance,
+        std::shared_ptr<CalibrationMapFunction> calibration_map,
         int num_physical_states = 3);
     
     /**
@@ -237,6 +239,7 @@ private:
     // Calibration parameters from Algorithm 1
     CalibrationParameters initial_calibration_;
     EnvironmentalVarianceModel variance_model_;
+    std::shared_ptr<CalibrationMapFunction> calibration_map_;
     
     // Environmental state
     EnvironmentalState initial_environment_;

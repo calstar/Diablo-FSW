@@ -172,7 +172,7 @@ class MultiEncoderCalibrationManager {
 public:
     struct EncoderInfo {
         std::string encoder_id;
-        EncoderType type;
+        EncoderCalibration::EncoderType type;
         std::string description;
         bool calibrated;
         double last_calibration_time;

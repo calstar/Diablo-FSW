@@ -235,7 +235,7 @@ public:
         bool enable_compression;
         bool enable_buffering;
         size_t buffer_size;
-        Priority priority;
+        CommunicationProtocol::Priority priority;
     };
 
     TelemetryManager();

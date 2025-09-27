@@ -266,7 +266,7 @@ public:
     struct StateTransition {
         EngineState from_state;
         EngineState to_state;
-        NavigationMode navigation_mode;
+        EKFNavigation::NavigationMode navigation_mode;
         double transition_time;
         bool requires_reinitialization;
     };
@@ -276,7 +276,7 @@ public:
 
     bool initialize(std::shared_ptr<EKFNavigation> navigation_system);
     bool updateEngineState(EngineState engine_state);
-    NavigationMode getNavigationModeForEngineState(EngineState engine_state) const;
+    EKFNavigation::NavigationMode getNavigationModeForEngineState(EngineState engine_state) const;
 
     // State transition management
     bool addStateTransition(const StateTransition& transition);
@@ -288,7 +288,7 @@ public:
 
 private:
     void handleStateTransition(EngineState from_state, EngineState to_state);
-    NavigationMode determineNavigationMode(EngineState engine_state) const;
+    EKFNavigation::NavigationMode determineNavigationMode(EngineState engine_state) const;
 
     std::shared_ptr<EKFNavigation> navigation_system_;
     std::atomic<EngineState> current_engine_state_;

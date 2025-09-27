@@ -215,9 +215,9 @@ std::pair<Eigen::VectorXd, Eigen::MatrixXd> EnvironmentalRobustCalibration::upda
     
     // Solve for updated parameters and covariance
     Eigen::MatrixXd covariance_k = information_matrix.inverse();
-    Eigen::VectorXd theta_k = covariance_k * information_vector;
+    Eigen::VectorXd theta_updated = covariance_k * information_vector;
     
-    return std::make_pair(theta_k, covariance_k);
+    return std::make_pair(theta_updated, covariance_k);
 }
 
 void EnvironmentalRobustCalibration::updateEnvironmentalVarianceParameters(const Eigen::VectorXd& theta_k, int k) {
@@ -365,9 +365,11 @@ EnvironmentalAdaptiveEKF::EnvironmentalAdaptiveEKF(
     const EnvironmentalVarianceModel& environmental_variance_model,
     const EnvironmentalState& initial_environmental_state,
     const Eigen::MatrixXd& initial_environmental_covariance,
+    std::shared_ptr<CalibrationMapFunction> calibration_map,
     int num_physical_states)
     : initial_calibration_(calibration_parameters),
       variance_model_(environmental_variance_model),
+      calibration_map_(calibration_map),
       initial_environment_(initial_environmental_state),
       initial_environmental_covariance_(initial_environmental_covariance),
       num_physical_states_(num_physical_states),
@@ -680,7 +682,15 @@ std::pair<bool, double> HumanInTheLoopCalibrationSystem::processTrainingMeasurem
     // Check if we have enough data for autonomous predictions
     if (algorithm1_->isReadyForDeployment()) {
         // Transition to deployment phase
-        completeTrainingPhase();
+        // Create default population priors for transition
+        Eigen::VectorXd population_prior_mean = Eigen::VectorXd::Zero(3); // 3 parameters for polynomial
+        population_prior_mean(0) = 1000.0;  // offset
+        population_prior_mean(1) = 1000.0;  // linear coefficient  
+        population_prior_mean(2) = 0.0;     // quadratic coefficient
+        
+        Eigen::MatrixXd population_prior_covariance = Eigen::MatrixXd::Identity(3, 3) * 100.0;
+        
+        completeTrainingPhase(population_prior_mean, population_prior_covariance);
         auto [predicted_pressure, uncertainty] = algorithm2_->processMeasurement(voltage, 0.0, environmental_state);
         return std::make_pair(false, predicted_pressure);
     }
@@ -809,6 +819,7 @@ void HumanInTheLoopCalibrationSystem::initializeAlgorithm2(const CalibrationPara
         variance_model,
         initial_env_state,
         initial_env_covariance,
+        calibration_map_,
         3  // Number of physical states
     );
 }

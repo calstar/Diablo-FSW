@@ -19,10 +19,10 @@
 #include <fstream>
 #include <iomanip>
 
-#include "calibration/include/PTCalibrationFramework.hpp"
-#include "calibration/include/PTCalibrationTool.hpp"
-#include "comms/include/PTMessage.hpp"
-#include "comms/include/ESP32SerialHandler.hpp"
+#include "PTCalibrationFramework.hpp"
+#include "PTCalibrationTool.hpp"
+#include "PTMessage.hpp"
+#include "ESP32SerialHandler.hpp"
 
 class PTCalibrationExample {
 private:
@@ -227,12 +227,12 @@ private:
     void printCalibrationResults(const CalibrationSession& session) {
         std::cout << "\n--- Calibration Results ---" << std::endl;
         std::cout << "Session ID: " << session.session_id << std::endl;
-        std::cout << "Sensor ID: " << static_cast<int>(session.sensor_id) << std::endl;
+        std::cout << "Sensor ID: " << session.sensor_id << std::endl;
         std::cout << "PT Location: " << session.pt_location_name << std::endl;
         std::cout << "Data Points: " << session.data_points.size() << std::endl;
         
         std::cout << "\nCalibration Parameters:" << std::endl;
-        for (size_t i = 0; i < session.calibration_result.theta.size(); ++i) {
+        for (int i = 0; i < session.calibration_result.theta.size(); ++i) {
             std::cout << "  " << session.calibration_result.basis_functions[i] << ": " 
                       << std::fixed << std::setprecision(6) << session.calibration_result.theta(i) << std::endl;
         }

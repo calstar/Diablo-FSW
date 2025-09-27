@@ -17,10 +17,10 @@
 #include <vector>
 #include <map>
 
-#include "comms/include/ESP32SerialHandler.hpp"
-#include "nav/include/PTObservationMatrix.hpp"
-#include "comms/include/Timer.hpp"
-#include "comms/include/PTMessage.hpp"
+#include "ESP32SerialHandler.hpp"
+#include "PTObservationMatrix.hpp"
+#include "Timer.hpp"
+#include "PTMessage.hpp"
 
 class RawVoltagePTExample {
 private:

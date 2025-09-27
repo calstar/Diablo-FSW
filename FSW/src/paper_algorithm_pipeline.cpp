@@ -15,11 +15,11 @@
 #include <atomic>
 #include <iomanip>
 
-#include "calibration/include/EnvironmentalRobustCalibration.hpp"
-#include "calibration/include/PTCalibrationFramework.hpp"
-#include "comms/include/ESP32SerialHandler.hpp"
-#include "comms/include/ESP32ConfigParser.hpp"
-#include "comms/include/PTMessage.hpp"
+#include "EnvironmentalRobustCalibration.hpp"
+#include "PTCalibrationFramework.hpp"
+#include "ESP32SerialHandler.hpp"
+#include "ESP32ConfigParser.hpp"
+#include "PTMessage.hpp"
 
 class PaperAlgorithmPipeline {
 private:

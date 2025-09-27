@@ -11,9 +11,11 @@
 #include <queue>
 #include <condition_variable>
 #include <cstdint>
+#include <map>
+#include <sstream>
 
 #include "Timer.hpp"
-#include "../comms/include/PTMessage.hpp"
+#include "PTMessage.hpp"
 
 /**
  * @brief Structure matching the Arduino SampleRecord format
@@ -143,7 +145,7 @@ private:
     ESP32Config config_;
     std::atomic<bool> running_;
     std::thread worker_thread_;
-    std::mutex data_mutex_;
+    mutable std::mutex data_mutex_;
     std::condition_variable cv_;
     
     // Serial communication

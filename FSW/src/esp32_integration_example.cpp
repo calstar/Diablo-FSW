@@ -16,9 +16,9 @@
 #include <memory>
 #include <vector>
 
-#include "comms/include/ESP32SerialHandler.hpp"
-#include "nav/include/ObservationMatrix.hpp"
-#include "comms/include/Timer.hpp"
+#include "ESP32SerialHandler.hpp"
+#include "ObservationMatrix.hpp"
+#include "Timer.hpp"
 
 class ESP32IntegrationExample {
 private:
@@ -40,9 +40,9 @@ public:
         observation_builder_ = std::make_shared<ObservationMatrixBuilder>(config);
         
         // Register callback for sensor data
-        esp32_handler_->registerSensorCallback(
-            [this](uint8_t sensor_id, double voltage, uint64_t timestamp, double sample_rate) {
-                this->onSensorData(sensor_id, voltage, timestamp, sample_rate);
+        esp32_handler_->registerPTCallback(
+            [this](uint8_t sensor_id, double raw_voltage_v, uint64_t timestamp, uint8_t pt_location) {
+                this->onSensorData(sensor_id, raw_voltage_v, timestamp, pt_location);
             }
         );
     }
@@ -96,9 +96,9 @@ public:
     }
 
 private:
-    void onSensorData(uint8_t sensor_id, double voltage, uint64_t timestamp, double sample_rate) {
+    void onSensorData(uint8_t sensor_id, double raw_voltage_v, uint64_t timestamp, uint8_t pt_location) {
         std::cout << "Received sensor data - ID: " << static_cast<int>(sensor_id) 
-                  << ", Voltage: " << voltage << "V, Rate: " << sample_rate << "Hz" << std::endl;
+                  << ", Voltage: " << raw_voltage_v << "V, Location: " << static_cast<int>(pt_location) << std::endl;
     }
     
     void processingLoop() {

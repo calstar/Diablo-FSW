@@ -194,7 +194,7 @@ class CalibrationSequenceManager {
 public:
     struct CalibrationStep {
         std::string name;
-        SensorType sensor_type;
+        SensorCalibration::SensorType sensor_type;
         std::string sensor_id;
         std::function<bool()> calibration_function;
         std::vector<std::string> dependencies;

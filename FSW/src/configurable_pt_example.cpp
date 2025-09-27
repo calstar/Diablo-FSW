@@ -17,9 +17,9 @@
 #include <vector>
 #include <map>
 
-#include "comms/include/ESP32ConfigParser.hpp"
-#include "comms/include/Timer.hpp"
-#include "comms/include/PTMessage.hpp"
+#include "ESP32ConfigParser.hpp"
+#include "Timer.hpp"
+#include "PTMessage.hpp"
 
 class ConfigurablePTExample {
 private:

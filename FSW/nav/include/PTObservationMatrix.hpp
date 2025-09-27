@@ -7,7 +7,7 @@
 #include <Eigen/Dense>
 #include <cstdint>
 
-#include "../comms/include/PTMessage.hpp"
+#include "PTMessage.hpp"
 
 /**
  * @brief PT Sensor measurement with raw voltage data
@@ -34,6 +34,8 @@ struct PTObservationMatrixConfig {
     bool enable_outlier_detection;    // Enable outlier detection
     double outlier_threshold_sigma;   // Outlier threshold in standard deviations
     size_t max_pt_sensors;            // Maximum number of PT sensors (default 9)
+    bool enable_interpolation;        // Enable interpolation for missing data
+    double interpolation_window_ms;   // Interpolation window size (ms)
 };
 
 /**

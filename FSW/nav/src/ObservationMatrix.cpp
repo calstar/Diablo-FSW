@@ -1,4 +1,5 @@
 #include "ObservationMatrix.hpp"
+#include "Timer.hpp"
 #include <iostream>
 #include <algorithm>
 #include <cmath>
@@ -30,8 +31,8 @@ void ObservationMatrixBuilder::addBarometerSensors(const std::vector<std::shared
     std::cout << "Barometer sensor integration not yet implemented" << std::endl;
 }
 
-void ObservationMatrixBuilder::addGPSSensors(const std::vector<std::shared_ptr<GPSMessage>>& gps_position_messages,
-                                            const std::vector<std::shared_ptr<GPSMessage>>& gps_velocity_messages) {
+void ObservationMatrixBuilder::addGPSSensors(const std::vector<std::shared_ptr<GPSPositionMessage>>& gps_position_messages,
+                                            const std::vector<std::shared_ptr<GPSVelocityMessage>>& gps_velocity_messages) {
     // Placeholder implementation
     std::cout << "GPS sensor integration not yet implemented" << std::endl;
 }
@@ -62,7 +63,7 @@ ObservationMatrixResult ObservationMatrixBuilder::buildObservationMatrix(
         
         // Build measurement vector and observation matrix
         result.measurement_vector = buildMeasurementVector(state_mapping);
-        result.observation_matrix = buildObservationMatrix(state_vector_size, state_mapping);
+        result.observation_matrix = buildObservationMatrixOnly(state_vector_size, state_mapping);
         result.measurement_covariance = buildMeasurementCovariance(measurements_);
         
         // Extract metadata
@@ -263,7 +264,7 @@ Eigen::VectorXd ObservationMatrixBuilder::buildMeasurementVector(
     return measurement_vector;
 }
 
-Eigen::MatrixXd ObservationMatrixBuilder::buildObservationMatrix(
+Eigen::MatrixXd ObservationMatrixBuilder::buildObservationMatrixOnly(
     size_t state_vector_size,
     const std::map<size_t, SensorType>& state_mapping) {
     
@@ -304,10 +305,10 @@ std::vector<SensorMeasurement> ObservationMatrixBuilder::convertPTMessage(
         SensorMeasurement pressure_measurement;
         pressure_measurement.type = SensorType::PT_PRESSURE;
         pressure_measurement.sensor_id = pt_message.getField<1>(); // sensor_id
-        pressure_measurement.value = pt_message.getField<3>();     // pressure
-        pressure_measurement.uncertainty = pt_message.getField<4>(); // pressure_uncertainty
-        pressure_measurement.timestamp_ns = pt_message.getField<11>(); // time_monotonic
-        pressure_measurement.valid = pt_message.getField<7>(); // calibration_valid
+        pressure_measurement.value = pt_message.getField<2>();     // raw_voltage_v (will be converted to pressure later)
+        pressure_measurement.uncertainty = 50.0; // Default voltage uncertainty (Pa equivalent)
+        pressure_measurement.timestamp_ns = pt_message.getField<0>(); // timestamp_ns
+        pressure_measurement.valid = true; // Assume valid for raw voltage
         measurements.push_back(pressure_measurement);
     }
     
@@ -315,10 +316,10 @@ std::vector<SensorMeasurement> ObservationMatrixBuilder::convertPTMessage(
         SensorMeasurement temp_measurement;
         temp_measurement.type = SensorType::PT_TEMPERATURE;
         temp_measurement.sensor_id = pt_message.getField<1>(); // sensor_id
-        temp_measurement.value = pt_message.getField<5>();     // temperature
+        temp_measurement.value = 25.0;     // Default temperature (no temperature field in current PTMessage)
         temp_measurement.uncertainty = 1.0; // Default temperature uncertainty
-        temp_measurement.timestamp_ns = pt_message.getField<11>(); // time_monotonic
-        temp_measurement.valid = pt_message.getField<7>(); // calibration_valid
+        temp_measurement.timestamp_ns = pt_message.getField<0>(); // timestamp_ns
+        temp_measurement.valid = true; // Assume valid
         measurements.push_back(temp_measurement);
     }
     
@@ -338,8 +339,14 @@ SensorMeasurement ObservationMatrixBuilder::convertBarometerMessage(const Barome
     return measurement;
 }
 
-std::vector<SensorMeasurement> ObservationMatrixBuilder::convertGPSMessage(
-    const GPSMessage& gps_message, bool use_position, bool use_velocity) {
+std::vector<SensorMeasurement> ObservationMatrixBuilder::convertGPSPositionMessage(
+    const GPSPositionMessage& gps_message, bool use_position) {
+    // Placeholder implementation
+    return std::vector<SensorMeasurement>();
+}
+
+std::vector<SensorMeasurement> ObservationMatrixBuilder::convertGPSVelocityMessage(
+    const GPSVelocityMessage& gps_message, bool use_velocity) {
     // Placeholder implementation
     return std::vector<SensorMeasurement>();
 }

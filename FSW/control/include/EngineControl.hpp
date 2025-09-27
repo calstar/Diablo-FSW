@@ -54,6 +54,7 @@ public:
         bool ignition_confirmed;
         bool all_systems_go;
         std::chrono::steady_clock::time_point phase_start_time;
+        std::chrono::steady_clock::time_point timestamp;
     };
 
     struct ControlGains {
@@ -142,11 +143,11 @@ private:
 
     // Control gains
     ControlGains control_gains_;
-    std::mutex gains_mutex_;
+    mutable std::mutex gains_mutex_;
 
     // Engine state
     EngineState engine_state_;
-    std::mutex state_mutex_;
+    mutable std::mutex state_mutex_;
 
     // Threading
     std::thread control_thread_;

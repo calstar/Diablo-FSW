@@ -9,7 +9,7 @@
 #include <functional>
 #include <chrono>
 
-#include "comms/include/PTMessage.hpp"
+#include "PTMessage.hpp"
 
 /**
  * @brief Environmental state vector for adaptive calibration

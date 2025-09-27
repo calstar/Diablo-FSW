@@ -24,6 +24,11 @@ endif()
 # Include directories
 include_directories(
     ${CMAKE_SOURCE_DIR}/FSW/include
+    ${CMAKE_SOURCE_DIR}/FSW/calibration/include
+    ${CMAKE_SOURCE_DIR}/FSW/comms/include
+    ${CMAKE_SOURCE_DIR}/FSW/control/include
+    ${CMAKE_SOURCE_DIR}/FSW/nav/include
+    ${CMAKE_SOURCE_DIR}/FSW/state/include
     ${CMAKE_SOURCE_DIR}/comms/include
     ${CMAKE_SOURCE_DIR}/external/shared
     ${CMAKE_SOURCE_DIR}/utl
@@ -32,7 +37,7 @@ include_directories(
 # External dependencies
 include_directories(${EIGEN3_INCLUDE_DIRS})
 
-# Source files for flight software
+# Source files for flight software (main executable only)
 set(FSW_SOURCES
     FSW/src/main.cpp
     # Control system sources
@@ -51,20 +56,36 @@ set(FSW_SOURCES
     FSW/calibration/src/PTCalibrationFramework.cpp
     FSW/calibration/src/SmartCalibrationSystem.cpp
     FSW/calibration/src/EnvironmentalRobustCalibration.cpp
+    FSW/calibration/src/PTCalibrationTool.cpp
+    FSW/calibration/src/PTCalibrationMonitor.cpp
     # Navigation system sources
     FSW/nav/src/SensorFusion.cpp
     FSW/nav/src/EKFNavigation.cpp
     FSW/nav/src/ObservationMatrix.cpp
+    FSW/nav/src/PTObservationMatrixBuilder.cpp
     # State management sources
     FSW/state/src/StateMachine.cpp
-    # ESP32 integration examples
-    FSW/src/esp32_integration_example.cpp
-    FSW/src/pt_integration_example.cpp
-    FSW/src/raw_voltage_pt_example.cpp
-    FSW/src/configurable_pt_example.cpp
-    FSW/src/pt_calibration_example.cpp
-    FSW/src/complete_calibration_pipeline.cpp
-    FSW/src/paper_algorithm_pipeline.cpp
+)
+
+# Source files for shared library (used by examples) - only include implemented files
+set(FSW_LIB_SOURCES
+    # Control system sources (only EngineControl has implementation)
+    FSW/control/src/EngineControl.cpp
+    # Communication system sources
+    FSW/comms/src/ESP32SerialHandler.cpp
+    FSW/comms/src/ESP32ConfigParser.cpp
+    # Calibration system sources
+    FSW/calibration/src/SensorCalibration.cpp
+    FSW/calibration/src/EncoderCalibration.cpp
+    FSW/calibration/src/PTCalibrationFramework.cpp
+    FSW/calibration/src/SmartCalibrationSystem.cpp
+    FSW/calibration/src/EnvironmentalRobustCalibration.cpp
+    FSW/calibration/src/PTCalibrationTool.cpp
+    FSW/calibration/src/PTCalibrationMonitor.cpp
+    # Navigation system sources
+    FSW/nav/src/SensorFusion.cpp
+    FSW/nav/src/ObservationMatrix.cpp
+    FSW/nav/src/PTObservationMatrixBuilder.cpp
 )
 
 # Source files for utilities
@@ -73,33 +94,71 @@ set(UTL_SOURCES
     # No .cpp files needed as they are template/header-only libraries
 )
 
-# Create flight software executable
-add_executable(engine_controller ${FSW_SOURCES} ${UTL_SOURCES})
+# Create shared library for examples
+add_library(fsw_lib SHARED ${FSW_LIB_SOURCES} ${UTL_SOURCES})
 
-# Link libraries
-target_link_libraries(engine_controller
+# Create flight software executable (commented out until all source implementations are added)
+# add_executable(engine_controller ${FSW_SOURCES} ${UTL_SOURCES})
+
+# Create example executables
+add_executable(esp32_integration_example FSW/src/esp32_integration_example.cpp)
+add_executable(pt_integration_example FSW/src/pt_integration_example.cpp)
+add_executable(raw_voltage_pt_example FSW/src/raw_voltage_pt_example.cpp)
+add_executable(configurable_pt_example FSW/src/configurable_pt_example.cpp)
+add_executable(pt_calibration_example FSW/src/pt_calibration_example.cpp)
+add_executable(complete_calibration_pipeline FSW/src/complete_calibration_pipeline.cpp)
+add_executable(paper_algorithm_pipeline FSW/src/paper_algorithm_pipeline.cpp)
+
+# Link libraries for main executable (commented out until all source implementations are added)
+# target_link_libraries(engine_controller
+#     Eigen3::Eigen
+#     Threads::Threads
+#     pthread
+#     rt
+# )
+
+# Link libraries for shared library
+target_link_libraries(fsw_lib
     Eigen3::Eigen
     Threads::Threads
     pthread
     rt
 )
 
+# Link example executables to shared library
+target_link_libraries(esp32_integration_example fsw_lib)
+target_link_libraries(pt_integration_example fsw_lib)
+target_link_libraries(raw_voltage_pt_example fsw_lib)
+target_link_libraries(configurable_pt_example fsw_lib)
+target_link_libraries(pt_calibration_example fsw_lib)
+target_link_libraries(complete_calibration_pipeline fsw_lib)
+target_link_libraries(paper_algorithm_pipeline fsw_lib)
+
 # Link optional libraries
 if(LIBCANARD_FOUND)
-    target_link_libraries(engine_controller ${LIBCANARD_LIBRARIES})
-    target_compile_options(engine_controller PRIVATE ${LIBCANARD_CFLAGS_OTHER})
+    target_link_libraries(fsw_lib ${LIBCANARD_LIBRARIES})
+    target_compile_options(fsw_lib PRIVATE ${LIBCANARD_CFLAGS_OTHER})
 endif()
 
 # Compiler-specific options
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    target_compile_options(engine_controller PRIVATE -Wno-unused-parameter)
+    target_compile_options(fsw_lib PRIVATE -Wno-unused-parameter)
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    target_compile_options(engine_controller PRIVATE -Wno-unused-parameter)
+    target_compile_options(fsw_lib PRIVATE -Wno-unused-parameter)
 endif()
 
 # Install targets
-install(TARGETS engine_controller
+install(TARGETS fsw_lib
     RUNTIME DESTINATION bin
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+)
+
+# Install example executables
+install(TARGETS esp32_integration_example pt_integration_example raw_voltage_pt_example
+        configurable_pt_example pt_calibration_example complete_calibration_pipeline
+        paper_algorithm_pipeline
+    RUNTIME DESTINATION bin/examples
 )
 
 # Install configuration files

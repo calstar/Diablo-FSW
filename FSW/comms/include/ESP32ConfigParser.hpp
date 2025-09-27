@@ -88,6 +88,12 @@ public:
     std::shared_ptr<ESP32SystemConfig> loadConfig(const std::string& config_path);
     
     /**
+     * @brief Get last error message
+     * @return Last error message
+     */
+    std::string getLastError() const;
+    
+    /**
      * @brief Load configuration from default path
      * @return Shared pointer to configuration, nullptr on error
      */
@@ -206,11 +212,6 @@ private:
      */
     void setError(const std::string& error);
     
-    /**
-     * @brief Get last error message
-     * @return Last error message
-     */
-    std::string getLastError() const;
     
     // Helper methods for parsing individual config values
     void parseSerialConfigValue(ESP32SystemConfig& config, const std::string& key, const std::string& value);

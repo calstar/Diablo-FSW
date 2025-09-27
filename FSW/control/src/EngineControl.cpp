@@ -5,7 +5,7 @@ EngineControl::EngineControl() {
     current_phase_ = EnginePhase::PRE_IGNITION;
     thrust_demand_ = 0.0;
     mixture_ratio_demand_ = 6.0;
-    
+
     // Initialize valve positions
     for (int i = 0; i < 6; ++i) {
         valve_positions_[i] = 0.0;
@@ -124,16 +124,16 @@ void EngineControl::controlLoop() {
     while (running_) {
         try {
             auto current_time = std::chrono::steady_clock::now();
-            
+
             // Update control gains based on current conditions
             updateGainScheduling();
-            
+
             // Compute valve commands
             computeValveCommands();
-            
+
             // Check safety conditions
             checkAbortConditions();
-            
+
             // Update engine state
             {
                 std::lock_guard<std::mutex> lock(state_mutex_);
@@ -142,9 +142,9 @@ void EngineControl::controlLoop() {
                 engine_state_.mixture_ratio_demand = mixture_ratio_demand_;
                 engine_state_.timestamp = current_time;
             }
-            
+
             std::this_thread::sleep_for(control_period_);
-            
+
         } catch (const std::exception& e) {
             std::cerr << "Error in engine control loop: " << e.what() << std::endl;
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -155,10 +155,10 @@ void EngineControl::controlLoop() {
 void EngineControl::updateGainScheduling() {
     // TODO: Implement gain scheduling based on current engine state
     std::lock_guard<std::mutex> lock(gains_mutex_);
-    
+
     // Example gain scheduling based on chamber pressure
     double chamber_pressure = engine_state_.chamber_pressure;
-    
+
     if (chamber_pressure < 1e6) {
         // Low pressure gains
         control_gains_.thrust_control.kp = 1.0;
@@ -180,11 +180,12 @@ void EngineControl::updateGainScheduling() {
 void EngineControl::computeValveCommands() {
     // TODO: Implement valve command computation based on control algorithm
     // This would integrate with the optimal controller and gain scheduling
-    
+
     // Example simple control logic
-    double fuel_valve_cmd = computeMainFuelValvePosition(thrust_demand_, engine_state_.chamber_pressure);
+    double fuel_valve_cmd =
+        computeMainFuelValvePosition(thrust_demand_, engine_state_.chamber_pressure);
     double ox_valve_cmd = computeMainOxValvePosition(thrust_demand_, mixture_ratio_demand_);
-    
+
     setValvePosition(ValveType::MAIN_FUEL, fuel_valve_cmd);
     setValvePosition(ValveType::MAIN_OXIDIZER, ox_valve_cmd);
 }
@@ -197,9 +198,9 @@ void EngineControl::safetyMonitor() {
             // - Check for faults
             // - Monitor sensor health
             // - Check for emergency conditions
-            
+
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            
+
         } catch (const std::exception& e) {
             std::cerr << "Error in safety monitor: " << e.what() << std::endl;
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
@@ -216,7 +217,8 @@ double EngineControl::computeMainFuelValvePosition(double thrust_demand, double 
 double EngineControl::computeMainOxValvePosition(double thrust_demand, double mixture_ratio) {
     // TODO: Implement oxidizer valve position calculation
     // This would be based on the optimal controller output and calibration
-    double fuel_position = computeMainFuelValvePosition(thrust_demand, engine_state_.chamber_pressure);
+    double fuel_position =
+        computeMainFuelValvePosition(thrust_demand, engine_state_.chamber_pressure);
     return std::max(0.0, std::min(1.0, fuel_position * mixture_ratio / 6.0));
 }
 
@@ -230,8 +232,8 @@ double EngineControl::computePurgeValvePosition(EnginePhase phase) {
     switch (phase) {
         case EnginePhase::PRE_IGNITION:
         case EnginePhase::SHUTDOWN:
-            return 1.0; // Open for purging
+            return 1.0;  // Open for purging
         default:
-            return 0.0; // Closed during operation
+            return 0.0;  // Closed during operation
     }
 }

@@ -1,0 +1,111 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop, Test_Branch ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        build-type: [Debug, Release]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          libeigen3-dev \
+          clang-format \
+          pkg-config \
+          libcanard-dev \
+          valgrind \
+          cppcheck
+          
+    - name: Create build directory
+      run: mkdir build
+      
+    - name: Configure CMake
+      run: |
+        cd build
+        cmake -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} ..
+        
+    - name: Build project
+      run: |
+        cd build
+        make -j$(nproc)
+        
+    - name: Run static analysis
+      run: |
+        cppcheck --enable=all --inconclusive --std=c++17 \
+          --suppress=missingIncludeSystem \
+          --suppress=unusedFunction \
+          --suppress=noExplicitConstructor \
+          FSW/ comms/ utl/ || true
+          
+    - name: Check code formatting
+      run: |
+        ./format.sh --check
+        
+    - name: Run tests (if available)
+      run: |
+        cd build
+        if [ -f "engine_controller" ]; then
+          # Add your test commands here when tests are implemented
+          echo "Tests would run here"
+        fi
+        
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      if: matrix.build-type == 'Release'
+      with:
+        name: engine-controller-${{ matrix.build-type }}
+        path: build/engine_controller
+        
+  code-quality:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install clang-format
+      run: sudo apt-get update && sudo apt-get install -y clang-format
+      
+    - name: Check formatting
+      run: ./format.sh --check
+      
+    - name: Check for TODO/FIXME comments
+      run: |
+        if grep -r "TODO\|FIXME\|HACK" --include="*.cpp" --include="*.hpp" FSW/ comms/ utl/; then
+          echo "Found TODO/FIXME/HACK comments in code"
+          exit 1
+        fi
+        
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install security tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          bandit \
+          semgrep
+          
+    - name: Run security scan
+      run: |
+        # Scan for common security issues in C++ code
+        if command -v semgrep &> /dev/null; then
+          semgrep --config=auto --exclude="external/" .
+        fi

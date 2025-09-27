@@ -33,12 +33,12 @@ void send(T msg) {
 
 void cppGenerateDBConfig() {
     std::cout << "Generating database configuration..." << std::endl;
-    
+
     // ══════════════════════════════════════════════════════════════════════════════
     // IMUMessage
     // Fields: time_imu, accelerometer (x, y, z), gyroscope (x, y, z), time_monotonic
     // ══════════════════════════════════════════════════════════════════════════════
-    
+
     auto imuTable = builder::vtable({
         raw_field(0, 8, schema(PrimType::F64(), {}, pair(0x01, "time_imu"))),
         raw_field(8, 8, schema(PrimType::F64(), {}, pair(0x01, "accelerometer_x"))),
@@ -49,12 +49,12 @@ void cppGenerateDBConfig() {
         raw_field(48, 8, schema(PrimType::F64(), {}, pair(0x01, "gyroscope_z"))),
         raw_field(56, 8, schema(PrimType::U64(), {}, pair(0x01, "time_monotonic"))),
     });
-    
+
     send(VTableMsg{
         .id = {0x01, 0x00},
         .vtable = imuTable,
     });
-    
+
     send(set_component_name("time_imu"));
     send(set_component_name("accelerometer_x"));
     send(set_component_name("accelerometer_y"));
@@ -64,81 +64,81 @@ void cppGenerateDBConfig() {
     send(set_component_name("gyroscope_z"));
     send(set_component_name("time_monotonic"));
     send(set_entity_name(0x01, "IMU"));
-    
+
     // ══════════════════════════════════════════════════════════════════════════════
     // PTMessage (Pressure/Temperature)
     // Fields: time_pt, pressure, temperature, time_monotonic
     // ══════════════════════════════════════════════════════════════════════════════
-    
+
     auto ptTable = builder::vtable({
         raw_field(0, 8, schema(PrimType::F64(), {}, pair(0x02, "time_pt"))),
         raw_field(8, 8, schema(PrimType::F64(), {}, pair(0x02, "pressure"))),
         raw_field(16, 8, schema(PrimType::F64(), {}, pair(0x02, "temperature"))),
         raw_field(24, 8, schema(PrimType::U64(), {}, pair(0x02, "time_monotonic"))),
     });
-    
+
     send(VTableMsg{
         .id = {0x02, 0x00},
         .vtable = ptTable,
     });
-    
+
     send(set_component_name("time_pt"));
     send(set_component_name("pressure"));
     send(set_component_name("temperature"));
     send(set_component_name("time_monotonic"));
     send(set_entity_name(0x02, "PT"));
-    
+
     // ══════════════════════════════════════════════════════════════════════════════
     // TCMessage (Thermocouple)
     // Fields: time_tc, temperature, voltage, time_monotonic
     // ══════════════════════════════════════════════════════════════════════════════
-    
+
     auto tcTable = builder::vtable({
         raw_field(0, 8, schema(PrimType::F64(), {}, pair(0x03, "time_tc"))),
         raw_field(8, 8, schema(PrimType::F64(), {}, pair(0x03, "temperature"))),
         raw_field(16, 8, schema(PrimType::F64(), {}, pair(0x03, "voltage"))),
         raw_field(24, 8, schema(PrimType::U64(), {}, pair(0x03, "time_monotonic"))),
     });
-    
+
     send(VTableMsg{
         .id = {0x03, 0x00},
         .vtable = tcTable,
     });
-    
+
     send(set_component_name("time_tc"));
     send(set_component_name("temperature"));
     send(set_component_name("voltage"));
     send(set_component_name("time_monotonic"));
     send(set_entity_name(0x03, "TC"));
-    
+
     // ══════════════════════════════════════════════════════════════════════════════
     // RTDMessage (Resistance Temperature Detector)
     // Fields: time_rtd, temperature, resistance, time_monotonic
     // ══════════════════════════════════════════════════════════════════════════════
-    
+
     auto rtdTable = builder::vtable({
         raw_field(0, 8, schema(PrimType::F64(), {}, pair(0x04, "time_rtd"))),
         raw_field(8, 8, schema(PrimType::F64(), {}, pair(0x04, "temperature"))),
         raw_field(16, 8, schema(PrimType::F64(), {}, pair(0x04, "resistance"))),
         raw_field(24, 8, schema(PrimType::U64(), {}, pair(0x04, "time_monotonic"))),
     });
-    
+
     send(VTableMsg{
         .id = {0x04, 0x00},
         .vtable = rtdTable,
     });
-    
+
     send(set_component_name("time_rtd"));
     send(set_component_name("temperature"));
     send(set_component_name("resistance"));
     send(set_component_name("time_monotonic"));
     send(set_entity_name(0x04, "RTD"));
-    
+
     // ══════════════════════════════════════════════════════════════════════════════
     // BarometerMessage
     // Fields: time_bar, pressure, altitude, temperature, time_monotonic
     // ══════════════════════════════════════════════════════════════════════════════
-    
+
     auto barTable = builder::vtable({
         raw_field(0, 8, schema(PrimType::F64(), {}, pair(0x05, "time_bar"))),
         raw_field(8, 8, schema(PrimType::F64(), {}, pair(0x05, "pressure"))),
@@ -146,24 +146,24 @@ void cppGenerateDBConfig() {
         raw_field(24, 8, schema(PrimType::F64(), {}, pair(0x05, "temperature"))),
         raw_field(32, 8, schema(PrimType::U64(), {}, pair(0x05, "time_monotonic"))),
     });
-    
+
     send(VTableMsg{
         .id = {0x05, 0x00},
         .vtable = barTable,
     });
-    
+
     send(set_component_name("time_bar"));
     send(set_component_name("pressure"));
     send(set_component_name("altitude"));
     send(set_component_name("temperature"));
     send(set_component_name("time_monotonic"));
     send(set_entity_name(0x05, "Barometer"));
-    
+
     // ══════════════════════════════════════════════════════════════════════════════
     // GPSPositionMessage
     // Fields: time_gps_pos, latitude, longitude, altitude, time_monotonic
     // ══════════════════════════════════════════════════════════════════════════════
-    
+
     auto gpsPosTable = builder::vtable({
         raw_field(0, 8, schema(PrimType::F64(), {}, pair(0x06, "time_gps_pos"))),
         raw_field(8, 8, schema(PrimType::F64(), {}, pair(0x06, "latitude"))),
@@ -171,24 +171,24 @@ void cppGenerateDBConfig() {
         raw_field(24, 8, schema(PrimType::F64(), {}, pair(0x06, "altitude"))),
         raw_field(32, 8, schema(PrimType::U64(), {}, pair(0x06, "time_monotonic"))),
     });
-    
+
     send(VTableMsg{
         .id = {0x06, 0x00},
         .vtable = gpsPosTable,
     });
-    
+
     send(set_component_name("time_gps_pos"));
     send(set_component_name("latitude"));
     send(set_component_name("longitude"));
     send(set_component_name("altitude"));
     send(set_component_name("time_monotonic"));
     send(set_entity_name(0x06, "GPS_Position"));
-    
+
     // ══════════════════════════════════════════════════════════════════════════════
     // GPSVelocityMessage
     // Fields: time_gps_vel, velocity_x, velocity_y, velocity_z, time_monotonic
     // ══════════════════════════════════════════════════════════════════════════════
-    
+
     auto gpsVelTable = builder::vtable({
         raw_field(0, 8, schema(PrimType::F64(), {}, pair(0x07, "time_gps_vel"))),
         raw_field(8, 8, schema(PrimType::F64(), {}, pair(0x07, "velocity_x"))),
@@ -196,23 +196,23 @@ void cppGenerateDBConfig() {
         raw_field(24, 8, schema(PrimType::F64(), {}, pair(0x07, "velocity_z"))),
         raw_field(32, 8, schema(PrimType::U64(), {}, pair(0x07, "time_monotonic"))),
     });
-    
+
     send(VTableMsg{
         .id = {0x07, 0x00},
         .vtable = gpsVelTable,
     });
-    
+
     send(set_component_name("time_gps_vel"));
     send(set_component_name("velocity_x"));
     send(set_component_name("velocity_y"));
     send(set_component_name("velocity_z"));
     send(set_component_name("time_monotonic"));
     send(set_entity_name(0x07, "GPS_Velocity"));
-    
+
     // ══════════════════════════════════════════════════════════════════════════════
     // Flight Software System Messages
     // ══════════════════════════════════════════════════════════════════════════════
-    
+
     // ══════════════════════════════════════════════════════════════════════════════
     // EngineControlMessage
     // Fields: timestamp, engine_phase, thrust_demand, thrust_actual, chamber_pressure,
@@ -220,7 +220,7 @@ void cppGenerateDBConfig() {
     //         ox_valve_position, fuel_flow_rate, ox_flow_rate, specific_impulse,
     //         efficiency, ignition_confirmed, all_systems_go, time_monotonic
     // ══════════════════════════════════════════════════════════════════════════════
-    
+
     auto engineControlTable = builder::vtable({
         raw_field(0, 8, schema(PrimType::F64(), {}, pair(0x10, "timestamp"))),
         raw_field(8, 1, schema(PrimType::U8(), {}, pair(0x10, "engine_phase"))),
@@ -239,12 +239,12 @@ void cppGenerateDBConfig() {
         raw_field(98, 1, schema(PrimType::Bool(), {}, pair(0x10, "all_systems_go"))),
         raw_field(99, 8, schema(PrimType::U64(), {}, pair(0x10, "time_monotonic"))),
     });
-    
+
     send(VTableMsg{
         .id = {0x10, 0x00},
         .vtable = engineControlTable,
     });
-    
+
     send(set_component_name("timestamp"));
     send(set_component_name("engine_phase"));
     send(set_component_name("thrust_demand"));
@@ -262,14 +262,14 @@ void cppGenerateDBConfig() {
     send(set_component_name("all_systems_go"));
     send(set_component_name("time_monotonic"));
     send(set_entity_name(0x10, "EngineControl"));
-    
+
     // ══════════════════════════════════════════════════════════════════════════════
     // ValveControlMessage
     // Fields: timestamp, valve_id, valve_type, commanded_position, actual_position,
     //         position_error, velocity, current, temperature, rate_limit,
     //         emergency_close, fault_detected, valve_state, command_confidence, time_monotonic
     // ══════════════════════════════════════════════════════════════════════════════
-    
+
     auto valveControlTable = builder::vtable({
         raw_field(0, 8, schema(PrimType::F64(), {}, pair(0x11, "timestamp"))),
         raw_field(8, 1, schema(PrimType::U8(), {}, pair(0x11, "valve_id"))),
@@ -287,12 +287,12 @@ void cppGenerateDBConfig() {
         raw_field(69, 8, schema(PrimType::F64(), {}, pair(0x11, "command_confidence"))),
         raw_field(77, 8, schema(PrimType::U64(), {}, pair(0x11, "time_monotonic"))),
     });
-    
+
     send(VTableMsg{
         .id = {0x11, 0x00},
         .vtable = valveControlTable,
     });
-    
+
     send(set_component_name("timestamp"));
     send(set_component_name("valve_id"));
     send(set_component_name("valve_type"));
@@ -309,14 +309,14 @@ void cppGenerateDBConfig() {
     send(set_component_name("command_confidence"));
     send(set_component_name("time_monotonic"));
     send(set_entity_name(0x11, "ValveControl"));
-    
+
     // ══════════════════════════════════════════════════════════════════════════════
     // Enhanced PTMessage (Pressure Transducer with Calibration Data)
     // Fields: timestamp, sensor_id, raw_voltage, pressure, pressure_uncertainty,
     //         temperature, calibration_quality, calibration_valid, drift_detected,
     //         sensor_health, environmental_factor, time_monotonic
     // ══════════════════════════════════════════════════════════════════════════════
-    
+
     auto enhancedPTTable = builder::vtable({
         raw_field(0, 8, schema(PrimType::F64(), {}, pair(0x12, "timestamp"))),
         raw_field(8, 1, schema(PrimType::U8(), {}, pair(0x12, "sensor_id"))),
@@ -331,12 +331,12 @@ void cppGenerateDBConfig() {
         raw_field(59, 8, schema(PrimType::F64(), {}, pair(0x12, "environmental_factor"))),
         raw_field(67, 8, schema(PrimType::U64(), {}, pair(0x12, "time_monotonic"))),
     });
-    
+
     send(VTableMsg{
         .id = {0x12, 0x00},
         .vtable = enhancedPTTable,
     });
-    
+
     send(set_component_name("timestamp"));
     send(set_component_name("sensor_id"));
     send(set_component_name("raw_voltage"));
@@ -350,7 +350,7 @@ void cppGenerateDBConfig() {
     send(set_component_name("environmental_factor"));
     send(set_component_name("time_monotonic"));
     send(set_entity_name(0x12, "EnhancedPT"));
-    
+
     // ══════════════════════════════════════════════════════════════════════════════
     // NavigationMessage (EKF Navigation State)
     // Fields: timestamp, position_x, position_y, position_z, velocity_x, velocity_y, velocity_z,
@@ -359,7 +359,7 @@ void cppGenerateDBConfig() {
     //         acceleration_z, engine_thrust, engine_mass, navigation_quality,
     //         navigation_mode, navigation_valid, time_monotonic
     // ══════════════════════════════════════════════════════════════════════════════
-    
+
     auto navigationTable = builder::vtable({
         raw_field(0, 8, schema(PrimType::F64(), {}, pair(0x13, "timestamp"))),
         raw_field(8, 8, schema(PrimType::F64(), {}, pair(0x13, "position_x"))),
@@ -385,12 +385,12 @@ void cppGenerateDBConfig() {
         raw_field(161, 1, schema(PrimType::Bool(), {}, pair(0x13, "navigation_valid"))),
         raw_field(162, 8, schema(PrimType::U64(), {}, pair(0x13, "time_monotonic"))),
     });
-    
+
     send(VTableMsg{
         .id = {0x13, 0x00},
         .vtable = navigationTable,
     });
-    
+
     send(set_component_name("timestamp"));
     send(set_component_name("position_x"));
     send(set_component_name("position_y"));
@@ -415,14 +415,15 @@ void cppGenerateDBConfig() {
     send(set_component_name("navigation_valid"));
     send(set_component_name("time_monotonic"));
     send(set_entity_name(0x13, "Navigation"));
-    
+
     // ══════════════════════════════════════════════════════════════════════════════
     // CalibrationMessage
     // Fields: timestamp, sensor_id, sensor_type, calibration_status, calibration_quality,
     //         rmse, nrmse, coverage_95, extrapolation_confidence, num_calibration_points,
-    //         drift_detected, calibration_valid, last_calibration_time, sensor_health, time_monotonic
+    //         drift_detected, calibration_valid, last_calibration_time, sensor_health,
+    //         time_monotonic
     // ══════════════════════════════════════════════════════════════════════════════
-    
+
     auto calibrationTable = builder::vtable({
         raw_field(0, 8, schema(PrimType::F64(), {}, pair(0x14, "timestamp"))),
         raw_field(8, 1, schema(PrimType::U8(), {}, pair(0x14, "sensor_id"))),
@@ -440,12 +441,12 @@ void cppGenerateDBConfig() {
         raw_field(72, 1, schema(PrimType::U8(), {}, pair(0x14, "sensor_health"))),
         raw_field(73, 8, schema(PrimType::U64(), {}, pair(0x14, "time_monotonic"))),
     });
-    
+
     send(VTableMsg{
         .id = {0x14, 0x00},
         .vtable = calibrationTable,
     });
-    
+
     send(set_component_name("timestamp"));
     send(set_component_name("sensor_id"));
     send(set_component_name("sensor_type"));
@@ -462,7 +463,7 @@ void cppGenerateDBConfig() {
     send(set_component_name("sensor_health"));
     send(set_component_name("time_monotonic"));
     send(set_entity_name(0x14, "Calibration"));
-    
+
     // ══════════════════════════════════════════════════════════════════════════════
     // SystemHealthMessage
     // Fields: timestamp, system_status, system_health, active_faults, total_faults,
@@ -470,7 +471,7 @@ void cppGenerateDBConfig() {
     //         navigation_accuracy, calibration_quality, emergency_status,
     //         safety_systems_ok, communication_ok, time_monotonic
     // ══════════════════════════════════════════════════════════════════════════════
-    
+
     auto systemHealthTable = builder::vtable({
         raw_field(0, 8, schema(PrimType::F64(), {}, pair(0x15, "timestamp"))),
         raw_field(8, 1, schema(PrimType::U8(), {}, pair(0x15, "system_status"))),
@@ -488,12 +489,12 @@ void cppGenerateDBConfig() {
         raw_field(75, 1, schema(PrimType::Bool(), {}, pair(0x15, "communication_ok"))),
         raw_field(76, 8, schema(PrimType::U64(), {}, pair(0x15, "time_monotonic"))),
     });
-    
+
     send(VTableMsg{
         .id = {0x15, 0x00},
         .vtable = systemHealthTable,
     });
-    
+
     send(set_component_name("timestamp"));
     send(set_component_name("system_status"));
     send(set_component_name("system_health"));
@@ -510,6 +511,6 @@ void cppGenerateDBConfig() {
     send(set_component_name("communication_ok"));
     send(set_component_name("time_monotonic"));
     send(set_entity_name(0x15, "SystemHealth"));
-    
+
     std::cout << "Database configuration complete!" << std::endl;
 }

@@ -3,48 +3,40 @@
 
 #include <array>
 #include <cstdint>
+
 #include "../../external/shared/message_factory/MessageFactory.hpp"
 
 /**
  * @brief Calibration Message
- * 
+ *
  * Contains calibration status and results for sensors and encoders
  */
-using CalibrationMessage = MessageFactory<
-    double,     // (0) timestamp (s) - timestamp
-    uint8_t,    // (1) sensor_id - sensor identifier
-    uint8_t,    // (2) sensor_type - sensor type (PT, RTD, TC, etc.)
-    uint8_t,    // (3) calibration_status - calibration status
-    double,     // (4) calibration_quality (0-1) - calibration quality
-    double,     // (5) rmse - root mean square error
-    double,     // (6) nrmse - normalized RMSE
-    double,     // (7) coverage_95 - 95% confidence interval coverage
-    double,     // (8) extrapolation_confidence - extrapolation confidence
-    uint32_t,   // (9) num_calibration_points - number of calibration points
-    double,     // (10) drift_detected - drift detection flag
-    bool,       // (11) calibration_valid - calibration validity
-    double,     // (12) last_calibration_time - last calibration timestamp
-    uint8_t,    // (13) sensor_health - sensor health status
-    uint64_t>;  // (14) time_monotonic (ns) - monotonic timestamp
+using CalibrationMessage =
+    MessageFactory<double,     // (0) timestamp (s) - timestamp
+                   uint8_t,    // (1) sensor_id - sensor identifier
+                   uint8_t,    // (2) sensor_type - sensor type (PT, RTD, TC, etc.)
+                   uint8_t,    // (3) calibration_status - calibration status
+                   double,     // (4) calibration_quality (0-1) - calibration quality
+                   double,     // (5) rmse - root mean square error
+                   double,     // (6) nrmse - normalized RMSE
+                   double,     // (7) coverage_95 - 95% confidence interval coverage
+                   double,     // (8) extrapolation_confidence - extrapolation confidence
+                   uint32_t,   // (9) num_calibration_points - number of calibration points
+                   double,     // (10) drift_detected - drift detection flag
+                   bool,       // (11) calibration_valid - calibration validity
+                   double,     // (12) last_calibration_time - last calibration timestamp
+                   uint8_t,    // (13) sensor_health - sensor health status
+                   uint64_t>;  // (14) time_monotonic (ns) - monotonic timestamp
 
 // Function to set calibration measurements
-static void set_calibration_measurement(
-    CalibrationMessage& message,
-    double timestamp,
-    uint8_t sensor_id,
-    uint8_t sensor_type,
-    uint8_t calibration_status,
-    double calibration_quality,
-    double rmse,
-    double nrmse,
-    double coverage_95,
-    double extrapolation_confidence,
-    uint32_t num_calibration_points,
-    double drift_detected,
-    bool calibration_valid,
-    double last_calibration_time,
-    uint8_t sensor_health,
-    uint64_t time_monotonic) {
+static void set_calibration_measurement(CalibrationMessage& message, double timestamp,
+                                        uint8_t sensor_id, uint8_t sensor_type,
+                                        uint8_t calibration_status, double calibration_quality,
+                                        double rmse, double nrmse, double coverage_95,
+                                        double extrapolation_confidence,
+                                        uint32_t num_calibration_points, double drift_detected,
+                                        bool calibration_valid, double last_calibration_time,
+                                        uint8_t sensor_health, uint64_t time_monotonic) {
     message.setField<0>(timestamp);
     message.setField<1>(sensor_id);
     message.setField<2>(sensor_type);
@@ -64,9 +56,9 @@ static void set_calibration_measurement(
 
 static CalibrationMessage generateTestMessageCalibration() {
     CalibrationMessage message;
-    set_calibration_measurement(message, 0.0, 1, 0, 2, 0.95, 10.0, 0.01, 
-                               0.95, 0.9, 100, 0.0, true, 0.0, 0, 0);
+    set_calibration_measurement(message, 0.0, 1, 0, 2, 0.95, 10.0, 0.01, 0.95, 0.9, 100, 0.0, true,
+                                0.0, 0, 0);
     return message;
 }
 
-#endif // CALIBRATION_MESSAGE_HPP
+#endif  // CALIBRATION_MESSAGE_HPP

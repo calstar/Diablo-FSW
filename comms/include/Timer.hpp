@@ -5,7 +5,7 @@
 #include <cstdint>
 
 class Timer {
-   public:
+public:
     // Starts the timer
     /*
      * @return: A timespec struct with the start time
@@ -24,10 +24,8 @@ class Timer {
     static inline double toc(const struct timespec &startTime) {
         struct timespec endTime;
         clock_gettime(CLOCK_MONOTONIC, &endTime);
-        return (static_cast<double>(endTime.tv_sec) -
-                static_cast<double>(startTime.tv_sec)) +
-               (static_cast<double>(endTime.tv_nsec) -
-                static_cast<double>(startTime.tv_nsec)) /
+        return (static_cast<double>(endTime.tv_sec) - static_cast<double>(startTime.tv_sec)) +
+               (static_cast<double>(endTime.tv_nsec) - static_cast<double>(startTime.tv_nsec)) /
                    1e9;
     }
 
@@ -60,8 +58,7 @@ class Timer {
     static inline void get_time(uint64_t &time_ns) {
         struct timespec curTime;
         clock_gettime(CLOCK_MONOTONIC, &curTime);
-        time_ns = static_cast<uint64_t>(curTime.tv_sec) *
-                      static_cast<int64_t>(1000000000) +
+        time_ns = static_cast<uint64_t>(curTime.tv_sec) * static_cast<int64_t>(1000000000) +
                   curTime.tv_nsec;
     }
 

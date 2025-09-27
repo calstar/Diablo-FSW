@@ -183,13 +183,26 @@ RUST_LOG=debug elodin-db run '[::]:2240' ~/.local/share/elodin/test_db
 
 This project is based on the FSW (Flight Software) system and maintains compatibility with the Elodin database architecture.
 
+## Documentation
+
+All detailed documentation has been organized in the `docs/` folder:
+
+- **[Development Guide](docs/DEVELOPMENT.md)** - Code formatting, CI/CD, and development guidelines
+- **[FSW Documentation](docs/FSW_README.md)** - Flight Software system architecture and components
+- **[Deployment Guide](docs/DEPLOYMENT.md)** - Production deployment instructions
+- **[Quick Start Guide](docs/QUICK_START.md)** - Quick setup and getting started
+- **[Message Types](docs/MESSAGE_TYPES_SUMMARY.md)** - Complete message type documentation
+- **[Migration Guide](docs/MIGRATION_TO_DIABLO.md)** - Migration instructions for Diablo FSW
+- **[Pressure Transducer Calibration](docs/PressureTransducerCalibrationFramework.tex)** - Calibration framework documentation
+
 ## Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+4. Run `./format.sh` to format your code
+5. Test thoroughly
+6. Submit a pull request
 
 ## Deployment
 
@@ -198,3 +211,5 @@ For production deployment:
 2. Configure log rotation
 3. Set up monitoring and alerting
 4. Use proper security configurations for network access
+
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for detailed deployment instructions.

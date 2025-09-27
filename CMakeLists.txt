@@ -51,16 +51,12 @@ set(FSW_SOURCES
     FSW/nav/src/EKFNavigation.cpp
     # State management sources
     FSW/state/src/StateMachine.cpp
-    # Legacy communication sources
-    comms/src/MessageFactory.cpp
 )
 
 # Source files for utilities
 set(UTL_SOURCES
-    utl/db.cpp
-    utl/dbConfig.cpp
-    utl/Elodin.cpp
-    utl/TCPSocket.cpp
+    # Note: utl/ directory contains only header files (.hpp)
+    # No .cpp files needed as they are template/header-only libraries
 )
 
 # Create flight software executable
@@ -118,7 +114,7 @@ endif()
 
 # Documentation
 find_package(Doxygen QUIET)
-if(DOXYGEN_FOUND)
+if(DOXYGEN_FOUND AND EXISTS ${CMAKE_SOURCE_DIR}/docs/Doxyfile.in)
     configure_file(${CMAKE_SOURCE_DIR}/docs/Doxyfile.in
                    ${CMAKE_BINARY_DIR}/Doxyfile @ONLY)
     add_custom_target(docs
@@ -127,6 +123,10 @@ if(DOXYGEN_FOUND)
         COMMENT "Generating API documentation with Doxygen"
         VERBATIM
     )
+elseif(DOXYGEN_FOUND)
+    message(STATUS "Doxygen found but Doxyfile.in not found, skipping documentation generation")
+else()
+    message(STATUS "Doxygen not found, skipping documentation generation")
 endif()
 
 # Packaging

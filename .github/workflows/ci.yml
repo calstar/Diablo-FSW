@@ -27,9 +27,13 @@ jobs:
           libeigen3-dev \
           clang-format \
           pkg-config \
-          libcanard-dev \
           valgrind \
           cppcheck
+          
+    - name: Install optional dependencies
+      run: |
+        # Try to install libcanard-dev, but don't fail if not available
+        sudo apt-get install -y libcanard-dev || echo "libcanard-dev not available, continuing without CAN bus support"
           
     - name: Create build directory
       run: mkdir build
@@ -37,7 +41,9 @@ jobs:
     - name: Configure CMake
       run: |
         cd build
+        echo "Configuring CMake for ${{ matrix.build-type }} build..."
         cmake -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} ..
+        echo "CMake configuration completed successfully"
         
     - name: Build project
       run: |

@@ -10,6 +10,9 @@
 constexpr double LA_EPSILON = 1e-12;
 constexpr double LA_SQRT_EPSILON = 1e-6;
 
+/*
+out: output buffer of size width x height, must not overlap with matrix
+*/
 void transpose(const double *__restrict__ matrix, size_t width, size_t height, double* __restrict__ out) {
     for (size_t i = 0; i < width; i++) {
         for (size_t j = 0; j < height; j++) {
@@ -64,7 +67,15 @@ void scale_inplace(double *matrix, size_t n, size_t m, double scalar) {
     }
 }
 
-/* AB */
+/*
+Matrix-matrix multiplication: out = A * B
+
+A: a_height x a_width
+B: b_height x b_width
+out: a_height x b_width
+
+workspace: buffer of size (b_width * b_height) (for transposed B)
+*/
 void mat_mat(const double *__restrict__ A, size_t a_width, size_t a_height, const double *__restrict__ B, double *__restrict__ workspace, size_t b_width, size_t b_height, double *__restrict__ out)
 {
     // Standard matrix multiplication, with transposed B for cache efficiency
@@ -251,12 +262,14 @@ void cholesky_solve(const double *__restrict__ L, const double *__restrict__ B, 
     }
 }
 
-/* For solving for Z in Z = BA^-1 -> ZA = B -> AX = B
-L NxN, A = LL^T
-B MxN
-Z MxN
-Bt is buffer of size N x M
-Zt is buffer of size N x M
+/* For solving for Z in Z = BA^-1
+
+L:  N x N   (A = L L^T)
+B:  M x N
+Z:  M x N   (output)
+
+Bt: workspace buffer of size N x M (holds B^T)
+Zt: workspace buffer of size N x M (holds Z^T)
 */
 void cholesky_solve_right(const double *__restrict__ L, const double *__restrict__ B, double *__restrict__ Z, double *__restrict__ Bt, double *__restrict__ Zt, size_t N, size_t M)
 {
@@ -269,7 +282,9 @@ void cholesky_solve_right(const double *__restrict__ L, const double *__restrict
 }
 
 /*
-CHECK THIS IS RIGHT
+Compute determinant using LU-style elimination.
+
+workspace: buffer of size n x n
 */
 double determinant(const double *__restrict__ A, size_t n, double *__restrict__ workspace) {
     // Copy A to workspace for LU decomposition in place
@@ -317,21 +332,27 @@ double determinant(const double *__restrict__ A, size_t n, double *__restrict__ 
     return sign * det;
 }
 
-/* The easiest test of PD is to try a Cholesky factorization */
+/* The easiest test of PD is to try a Cholesky factorization
+workspace: buffer of size N x N
+*/
 bool is_PD(const double *A, size_t N, double *workspace) {
     return cholesky_decompose(A, workspace, N);
 }
 
-/* Uses workspace to shift A by tolerance */
-bool is_PSD(const double *A, size_t n, double *workspace) {
+/*
+Test by shifting A slightly and using is_PD.
+
+shifted: buffer of size N x N
+workspace: buffer of size N x N
+*/
+bool is_PSD(const double *A, size_t n, double *shifted, double *workspace) {
     // Try is_PD on A + tol*I
-    double *shifted = workspace;
     std::memcpy(shifted, A, n * n * sizeof(double));
     for (size_t i = 0; i < n; i++) {
         shifted[i * n + i] += LA_SQRT_EPSILON; // LA_EPSILON is too strict
     }
 
-    return is_PD(shifted, n, workspace + n * n);
+    return is_PD(shifted, n, workspace);
 }
 
 /*Test symmetry within tolerance tol (allows for small floating-point differences) 

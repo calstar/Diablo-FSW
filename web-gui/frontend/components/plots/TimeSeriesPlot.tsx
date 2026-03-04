@@ -193,10 +193,10 @@ export default function TimeSeriesPlot({
           stroke: '#9CA3AF',
           grid: { show: true, stroke: '#555', width: 1 },
           ticks: { show: true, stroke: '#777', width: 1 },
-          font: 'bold 12px monospace',
-          labelFont: '12px system-ui',
-          gap: 8,
-          space: 120,
+          font: 'bold 10px monospace',
+          labelFont: '10px system-ui',
+          gap: 4,
+          space: 55,
           values: (_u, vals) => vals.map((v) => (v == null ? '' : Math.round(v).toString())),
         },
         {
@@ -204,11 +204,11 @@ export default function TimeSeriesPlot({
           stroke: '#9CA3AF',
           grid: { show: true, stroke: '#555', width: 1 },
           ticks: { show: true, stroke: '#777', width: 1 },
-          font: 'bold 12px monospace',
-          labelFont: '12px system-ui',
-          size: 60,
-          gap: 5,
-          space: 80,
+          font: 'bold 10px monospace',
+          labelFont: '10px system-ui',
+          size: 36,
+          gap: 4,
+          space: 40,
           values: (_u, vals) => vals.map((v) => (v == null ? '' : fmtAxisVal(v))),
         },
       ],
@@ -225,7 +225,7 @@ export default function TimeSeriesPlot({
       legend: {
         show: false,
       },
-      padding: [8, 12, 0, 0] as [number, number, number, number],
+      padding: [4, 8, 0, 0] as [number, number, number, number],
     });
 
     // ── Dimension helper — measure the CONTAINER (stable CSS size) ────────
@@ -528,12 +528,12 @@ export default function TimeSeriesPlot({
         )}
       </div>
 
-      {/* Legend */}
-      <div className="flex flex-wrap gap-x-5 gap-y-1.5 px-2 py-2 flex-shrink-0">
+      {/* Legend - compact single row */}
+      <div className="flex flex-nowrap gap-x-2 px-1.5 py-1 flex-shrink-0 overflow-x-auto">
         {entities.map((e, i) => (
           <div key={e} className="flex items-center gap-2">
-            <span className="w-4 h-[3px] rounded-full inline-block" style={{ background: colors[i] || '#3498DB' }} />
-            <span className="text-sm font-semibold font-mono text-gray-300">
+            <span className="w-3 h-[3px] rounded-full inline-block" style={{ background: colors[i] || '#3498DB' }} />
+            <span className="text-[9px] font-semibold font-mono text-gray-300 whitespace-nowrap">
               {labels?.[i] ?? e.split('.').pop() ?? e}
             </span>
           </div>

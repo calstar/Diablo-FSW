@@ -3,10 +3,10 @@
 import { useSensorStore, useSensorValue } from '@/lib/store';
 import { getWebSocketClient } from '@/lib/websocket';
 import { startDataCache } from '@/lib/data-cache';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ConnectionStatus, SystemState, CommandPayload, StateUpdate, SensorUpdate, ActuatorUpdate, MessageType, NotificationPayload } from '@/lib/types';
 import PressureBar from '@/components/plots/PressureBar';
-import { getEntityColor } from '@/lib/sensor-colors';
+import { PRESSURE_BAR_SENSORS } from '@/lib/sensor-colors';
 import NotificationPanel from '@/components/dashboard/NotificationPanel';
 import { useControlMode } from '@/lib/control-mode';
 
@@ -32,36 +32,34 @@ const SHORT_LABELS: Record<string, string> = {
   'PT_Cal.Ox_Upstream': 'LOX UP', 'PT_Cal.Ox_Downstream': 'LOX DN', 'PT_Cal.GSE_Low': 'GSE LO',
   'PT_Cal.GSE_Mid': 'GSE MID', 'PT_Cal.GSE_High': 'GSE HI', 'PT_Cal.GN2_High': 'GN2 HI',
 };
+const PRESSURE_BARS = PRESSURE_BAR_SENSORS.map((s) => ({
+  label: SHORT_LABELS[s.entity] ?? s.label,
+  entity: s.entity,
+  nop: s.nop!,
+  meop: s.meop!,
+  color: s.color,
+}));
 
 // Separate component for each pressure bar to properly use hooks
 function ReactivePressureBar({ label, entity, nop, meop, color }: {
   label: string;
   entity: string;
-  nop?: number;
-  meop?: number;
+  nop: number;
+  meop: number;
   color: string;
 }) {
   const value = useSensorValue(entity, 'pressure_psi');
   return (
-    <div className="flex-1 min-w-0 h-full overflow-hidden" style={{ maxWidth: 90 }}>
+    <div className="flex-1 min-w-0 h-full overflow-hidden" style={{ maxWidth: 80 }}>
       <PressureBar
         label={label}
         value={value}
         nop={nop} meop={meop} color={color}
         compact
+        showUnit={false}
       />
     </div>
   );
-}
-
-type PressureBarDef = { label: string; entity: string; nop?: number; meop?: number; color: string };
-
-function inferSystemFromRole(role: string): 'GN2' | 'ETH' | 'LOX' | null {
-  const r = role.toLowerCase();
-  if (r.includes('gn2')) return 'GN2';
-  if (r.includes('fuel') || r.includes('eth')) return 'ETH';
-  if (r.includes('ox') || r.includes('lox')) return 'LOX';
-  return null;
 }
 
 export default function TopBar() {
@@ -87,46 +85,8 @@ export default function TopBar() {
   const [clock, setClock] = useState('');
   const [countdown, setCountdown] = useState('');
   const [countdownExpired, setCountdownExpired] = useState(false);
-  const [pressureBars, setPressureBars] = useState<PressureBarDef[]>([]);
 
   const ws = getWebSocketClient();
-
-  const loadPressureBars = useCallback(() => {
-    Promise.allSettled([
-      fetch('/api/sensor-config').then((r) => (r.ok ? r.json() : null)),
-      fetch('/api/pressure-limits').then((r) => (r.ok ? r.json() : null)),
-    ]).then(([sensorRes, limitsRes]) => {
-      const sensors = sensorRes.status === 'fulfilled' ? (sensorRes.value?.sensors as any[] | undefined) : undefined;
-      const limits = limitsRes.status === 'fulfilled' ? (limitsRes.value?.pressure_limits as Record<string, any> | undefined) : undefined;
-      if (!Array.isArray(sensors) || sensors.length === 0) return;
-
-      const sorted = [...sensors].sort((a, b) => {
-        const ba = Number(a.boardId ?? 0);
-        const bb = Number(b.boardId ?? 0);
-        if (ba !== bb) return ba - bb;
-        return Number(a.id ?? 0) - Number(b.id ?? 0);
-      });
-
-      const bars: PressureBarDef[] = sorted
-        .map((s) => {
-          const role = String(s.role || '');
-          const entity = String(s.calEntity || s.entity || '');
-          const sys = inferSystemFromRole(role);
-          const nop = sys ? limits?.[sys]?.NOP : undefined;
-          const meop = sys ? limits?.[sys]?.MEOP : undefined;
-          const label = SHORT_LABELS[entity] ?? role ?? entity;
-          return { label, entity, nop, meop, color: getEntityColor(entity) };
-        })
-        .filter((b) => b.entity.startsWith('PT_Cal.'))
-        .slice(0, 10);
-
-      setPressureBars(bars);
-    }).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    loadPressureBars();
-  }, [loadPressureBars]);
 
   useEffect(() => {
     ws.connect();
@@ -155,9 +115,6 @@ export default function TopBar() {
     const unsubNotification = ws.on(MessageType.NOTIFICATION, (p: unknown) => {
       updateNotification(p as NotificationPayload);
     });
-    const unsubConfig = ws.on(MessageType.CONFIG_UPDATED, () => {
-      loadPressureBars();
-    });
     return () => {
       unsubConn();
       unsubState();
@@ -165,9 +122,8 @@ export default function TopBar() {
       unsubActuator();
       unsubExpected();
       unsubNotification();
-      unsubConfig();
     };
-  }, [ws, updateConnectionStatus, updateState, updateSensor, updateActuator, updateActuatorExpectedPositions, updateNotification, loadPressureBars]);
+  }, [ws, updateConnectionStatus, updateState, updateSensor, updateActuator, updateActuatorExpectedPositions, updateNotification]);
 
   useEffect(() => {
     const tick = () => setClock(new Date().toLocaleTimeString('en-US', { hour12: true }));
@@ -204,16 +160,6 @@ export default function TopBar() {
   const isConnected = connectionStatus.connected;
   const isFullyConnected = connectionStatus.connected && connectionStatus.elodinConnected;
 
-  const effectivePressureBars = useMemo(() => {
-    if (pressureBars.length > 0) return pressureBars;
-    // Fallback: keep UI stable even if /api/sensor-config is unavailable
-    return [
-      { label: 'GN2 REG', entity: 'PT_Cal.GN2_Regulated', color: getEntityColor('PT_Cal.GN2_Regulated') },
-      { label: 'FUEL UP', entity: 'PT_Cal.Fuel_Upstream', color: getEntityColor('PT_Cal.Fuel_Upstream') },
-      { label: 'LOX UP', entity: 'PT_Cal.Ox_Upstream', color: getEntityColor('PT_Cal.Ox_Upstream') },
-    ] as PressureBarDef[];
-  }, [pressureBars]);
-
   // Simple helper: send a single state-transition command
   const sendState = (state: SystemState) => {
     if (!controlEnabled) return;
@@ -243,11 +189,11 @@ export default function TopBar() {
   };
 
   return (
-    <div className="bg-card border-b border-gray-800 select-none flex-shrink-0" style={{ minHeight: 64 }}>
-      <div className="flex items-stretch h-full px-3 gap-3 py-1.5">
+    <div className="bg-card border-b border-gray-800 select-none flex-shrink-0" style={{ height: 110 }}>
+      <div className="flex items-stretch h-full px-3 gap-2 py-1.5">
 
         {/* Left: brand + connection + clock + countdown */}
-        <div className="flex flex-col justify-center gap-0.5 flex-shrink-0 pr-4 border-r border-gray-800/60">
+        <div className="flex flex-col justify-center gap-0.5 flex-shrink-0 pr-2 border-r border-gray-800/60">
           <span className="text-2xl font-bold tracking-widest text-blue-400 uppercase leading-none">
             DIABLO DAQ
           </span>
@@ -258,8 +204,7 @@ export default function TopBar() {
             </span>
           </div>
           <span className="text-xl font-mono text-gray-200 tabular-nums font-bold leading-tight">{clock}</span>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500 uppercase tracking-widest font-semibold">T−</span>
+          <div className="flex items-center">
             <span className={`text-xl font-mono tabular-nums font-bold leading-tight ${countdownExpired ? 'text-red-400' : 'text-white'}`}>
               {countdown}
             </span>
@@ -272,8 +217,8 @@ export default function TopBar() {
         </div>
 
         {/* Center: pressure bars — fills remaining space */}
-        <div className="flex-1 flex items-stretch justify-end gap-2 py-1 pr-2 min-w-0 overflow-hidden">
-          {effectivePressureBars.map(({ label, entity, nop, meop, color }) => (
+        <div className="flex-1 flex items-stretch justify-end gap-0.5 py-0.5 pr-0.5 min-w-0 overflow-hidden">
+          {PRESSURE_BARS.map(({ label, entity, nop, meop, color }) => (
             <ReactivePressureBar
               key={entity}
               label={label}
@@ -285,11 +230,11 @@ export default function TopBar() {
           ))}
         </div>
 
-        {/* Right: state + mode + abort (compact) */}
-        <div className="flex items-center gap-2 flex-shrink-0 pl-2 border-l border-gray-800/60">
-          <div className="flex flex-col items-center gap-0.5 w-28">
-            <span className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">STATE</span>
-            <span className={`text-lg font-bold font-mono tracking-wider text-center leading-tight whitespace-normal ${stateColor}`}>
+        {/* Right: state + abort */}
+        <div className="flex items-center gap-2 flex-shrink-0 pl-1 border-l border-gray-800/60">
+          <div className="flex flex-col items-center gap-0.5 w-32">
+            <span className="text-xs text-gray-400 uppercase tracking-widest font-bold">STATE</span>
+            <span className={`text-2xl font-bold font-mono tracking-wider text-center leading-tight whitespace-normal ${stateColor}`}>
               {currentStateName}
             </span>
           </div>
@@ -356,68 +301,57 @@ export default function TopBar() {
               )}
             </div>
 
-            <div className="flex flex-col items-center gap-0.5 border-l border-gray-800/60 pl-2">
-              <span className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold">MODE</span>
+          {/* Debug mode toggle */}
+          <div className="flex flex-col items-center gap-0.5 border-l border-gray-800/60 pl-1.5">
+            <span className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold">MODE</span>
+            <button
+              onClick={() => {
+                const newDebugMode = !debugMode;
+                setDebugMode(newDebugMode);
+                const cmd: CommandPayload = {
+                  commandType: 'debug_mode',
+                  data: { debugMode: newDebugMode }
+                };
+                ws.sendCommand(cmd);
+              }}
+              className={`px-2.5 py-1.5 rounded border text-[11px] font-bold uppercase tracking-wide transition-all ${
+                debugMode
+                  ? 'bg-yellow-800/60 border-yellow-600 text-yellow-300 shadow-[0_0_6px_rgba(234,179,8,0.3)]'
+                  : 'bg-gray-800 border-gray-700 text-gray-500 hover:border-gray-500'
+              }`}
+            >
+              {debugMode ? '🔓 DEBUG' : '🔒 SAFE'}
+            </button>
+          </div>
+
+          {/* Abort buttons */}
+          <div className="flex flex-col gap-0.5 border-l border-gray-800/60 pl-1.5">
+            <span className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold">ABORT</span>
+            <div className="flex flex-col gap-0.5">
               <button
-                onClick={() => {
-                  if (!controlEnabled) return;
-                  const newDebugMode = !debugMode;
-                  setDebugMode(newDebugMode);
-                  const cmd: CommandPayload = {
-                    commandType: 'debug_mode',
-                    data: { debugMode: newDebugMode }
-                  };
-                  ws.sendCommand(cmd);
-                }}
-                disabled={!controlEnabled}
-                className={`px-2.5 py-1.5 rounded text-[11px] font-bold uppercase tracking-wider border transition-all ${
-                  debugMode
-                    ? controlEnabled
-                      ? 'bg-yellow-800/60 border-yellow-600 text-yellow-300 shadow-[0_0_6px_rgba(234,179,8,0.3)]'
-                      : 'bg-yellow-900/40 border-yellow-800 text-yellow-700 cursor-not-allowed'
-                    : controlEnabled
-                      ? 'bg-gray-800 border-gray-700 text-gray-500 hover:border-gray-500'
-                      : 'bg-gray-900 border-gray-800 text-gray-700 cursor-not-allowed'
-                }`}
-                title={controlEnabled ? undefined : 'Viewer mode: controls locked'}
+                onClick={handleEngineAbort}
+                className="px-2.5 py-1 bg-amber-800 hover:bg-amber-700 active:bg-amber-900 border border-amber-600
+                           text-white font-semibold text-[11px] rounded tracking-wide transition-colors"
               >
-                {debugMode ? '🔓 DEBUG' : '🔒 SAFE'}
+                ENGINE ABORT
+              </button>
+              <button
+                onClick={handleGseAbort}
+                className="px-2.5 py-1 bg-orange-800 hover:bg-orange-700 active:bg-orange-900 border border-orange-600
+                           text-white font-semibold text-[11px] rounded tracking-wide transition-colors"
+              >
+                GSE ABORT
+              </button>
+              <button
+                onClick={handleEmergencyAbort}
+                className="px-2.5 py-1 bg-red-700 hover:bg-red-600 active:bg-red-800 border border-red-500
+                           text-white font-semibold text-[11px] rounded tracking-wide transition-colors
+                           shadow-[0_0_8px_rgba(239,68,68,0.4)]"
+              >
+                E-ABORT
               </button>
             </div>
-
-            <div className="flex flex-col gap-0.5 border-l border-gray-800/60 pl-2">
-              <span className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold">ABORT</span>
-              <div className="flex flex-col gap-0.5">
-                <button
-                  onClick={handleEngineAbort}
-                  disabled={!controlEnabled}
-                  className="px-2.5 py-1 bg-amber-800 hover:bg-amber-700 active:bg-amber-900 border border-amber-600
-                             text-white font-semibold text-[11px] rounded tracking-wider transition-colors disabled:bg-amber-900 disabled:border-amber-900 disabled:text-amber-700 disabled:cursor-not-allowed"
-                  title={controlEnabled ? undefined : 'Viewer mode: controls locked'}
-                >
-                  ENGINE ABORT
-                </button>
-                <button
-                  onClick={handleGseAbort}
-                  disabled={!controlEnabled}
-                  className="px-2.5 py-1 bg-orange-800 hover:bg-orange-700 active:bg-orange-900 border border-orange-600
-                             text-white font-semibold text-[11px] rounded tracking-wider transition-colors disabled:bg-orange-900 disabled:border-orange-900 disabled:text-orange-700 disabled:cursor-not-allowed"
-                  title={controlEnabled ? undefined : 'Viewer mode: controls locked'}
-                >
-                  GSE ABORT
-                </button>
-                <button
-                  onClick={handleEmergencyAbort}
-                  disabled={!controlEnabled}
-                  className="px-2.5 py-1 bg-red-700 hover:bg-red-600 active:bg-red-800 border border-red-500
-                             text-white font-semibold text-[11px] rounded tracking-wider transition-colors
-                             shadow-[0_0_6px_rgba(239,68,68,0.4)] disabled:bg-red-900 disabled:border-red-900 disabled:text-red-700 disabled:cursor-not-allowed"
-                  title={controlEnabled ? undefined : 'Viewer mode: controls locked'}
-                >
-                  E-ABORT
-                </button>
-              </div>
-            </div>
+          </div>
           </div>
         </div>
       </div>

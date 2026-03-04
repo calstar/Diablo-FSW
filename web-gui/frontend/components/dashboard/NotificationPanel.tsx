@@ -47,7 +47,7 @@ export default function NotificationPanel() {
   }, [items]);
 
   return (
-    <div className="h-full flex flex-col w-[150px] flex-shrink-0 relative">
+    <div className="h-full flex flex-col w-[190px] flex-shrink-0 relative">
       <div className="absolute top-1 right-1 pointer-events-none z-10">
         <span className="relative flex h-4 w-4 items-center justify-center">
           <span
@@ -74,24 +74,24 @@ export default function NotificationPanel() {
       <div className="flex-1 min-h-0 rounded border border-gray-800 bg-black/40 overflow-hidden">
         <div className="h-full overflow-y-auto divide-y divide-gray-800/70">
           {items.length === 0 ? (
-            <div className="px-3 py-2 text-xs text-gray-600">No recent notifications.</div>
+            <div className="px-3 py-2 text-[10px] text-gray-600">No recent notifications.</div>
           ) : (
             items.map((n, idx) => {
               const { emoji, color } = categoryStyle(n.category);
               return (
                 <div
                   key={n.key ?? idx}
-                  className={`px-2 py-1.5 flex items-start gap-2 ${
+                  className={`px-2 py-1 flex items-start gap-1.5 ${
                     n.isCurrent ? 'bg-gray-900/70' : 'bg-transparent'
                   }`}
                 >
-                  <span className={`${color} text-xs leading-none mt-0.5 flex-shrink-0`}>{emoji}</span>
+                  <span className={`${color} text-[10px] leading-none mt-0.5 flex-shrink-0`}>{emoji}</span>
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs text-gray-200 truncate">{n.message}</div>
-                    <div className="text-[10px] text-gray-500 flex items-center gap-2">
+                    <div className="text-[10px] text-gray-200 truncate">{n.message}</div>
+                    <div className="text-[9px] text-gray-500 flex items-center gap-1.5">
                       <span className="tabular-nums">{formatTime(n.timestampMs)}</span>
                       {n.isCurrent && (
-                        <span className="px-1.5 py-0.5 rounded-full bg-emerald-900/60 text-[9px] text-emerald-300 font-semibold">
+                        <span className="px-1 py-0.5 rounded-full bg-emerald-900/60 text-[8px] text-emerald-300 font-semibold">
                           current
                         </span>
                       )}

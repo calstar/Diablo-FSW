@@ -11,6 +11,7 @@ interface PressureBarProps {
   unit?: string;
   showLabels?: boolean; // Show NOP/MEOP labels on this bar (default true)
   compact?: boolean;    // Reduced font sizes for use in tight spaces (e.g. TopBar)
+  showUnit?: boolean;   // Show unit label under value (default true)
 }
 
 function fmtPressure(v: number): string {
@@ -68,6 +69,7 @@ export default function PressureBar({
   unit = 'PSI',
   showLabels = true,
   compact = false,
+  showUnit = true,
 }: PressureBarProps) {
   const displayValue = value ?? 0;
 
@@ -92,7 +94,7 @@ export default function PressureBar({
   return (
     <div className="flex flex-col items-center h-full gap-1 min-h-0 overflow-hidden select-none w-full">
       {/* Label */}
-      <div className={`${compact ? 'text-[10px]' : 'text-2xl'} font-bold uppercase tracking-wider text-gray-300 text-center leading-none flex-shrink-0 whitespace-nowrap`}>
+      <div className={`${compact ? 'text-[9px]' : 'text-2xl'} font-bold uppercase tracking-wider text-gray-300 text-center leading-none flex-shrink-0 whitespace-nowrap`}>
         {label}
       </div>
 
@@ -119,9 +121,11 @@ export default function PressureBar({
           className="absolute w-full pointer-events-none flex flex-col items-center"
           style={{ bottom: `${meopPct.toFixed(2)}%` }}
         >
-          <span className="text-sm font-mono font-extrabold text-red-400 whitespace-nowrap mb-0.5">
-            {meop}
-          </span>
+          {!compact && (
+            <span className="text-sm font-mono font-extrabold text-red-400 whitespace-nowrap mb-0.5">
+              {meop}
+            </span>
+          )}
           <div className="w-full border-t-2 border-dashed border-red-500/85" />
         </div>
 
@@ -130,9 +134,11 @@ export default function PressureBar({
           className="absolute w-full pointer-events-none flex flex-col items-center"
           style={{ bottom: `${nopPct.toFixed(2)}%` }}
         >
-          <span className="text-sm font-mono font-extrabold text-yellow-400 whitespace-nowrap mb-0.5">
-            {nop}
-          </span>
+          {!compact && (
+            <span className="text-sm font-mono font-extrabold text-yellow-400 whitespace-nowrap mb-0.5">
+              {nop}
+            </span>
+          )}
           <div className="w-full border-t-2 border-dashed border-yellow-500/85" />
         </div>
         {/* Fill top edge */}
@@ -150,10 +156,12 @@ export default function PressureBar({
 
       {/* Value + unit below bar — always rendered to keep bar height stable */}
       <div className="flex-shrink-0 text-center leading-none">
-        <div className={`${compact ? 'text-xs' : 'text-2xl'} font-bold font-mono tabular-nums`} style={{ color: barColor }}>
+        <div className={`${compact ? 'text-[10px]' : 'text-2xl'} font-bold font-mono tabular-nums`} style={{ color: barColor }}>
           {value !== null ? fmtPressure(value) : '---'}
         </div>
-        <div className={`${compact ? 'text-[9px]' : 'text-sm'} text-gray-400 font-semibold`}>{unit}</div>
+        {showUnit && (
+          <div className={`${compact ? 'text-[9px]' : 'text-sm'} text-gray-400 font-semibold`}>{unit}</div>
+        )}
       </div>
     </div>
   );

@@ -18,7 +18,9 @@
 - [ ] **TELL GSE MANAGER HIGH PRESSURE K-BOTTLE IS SET.**
 
 ## Dry Run & Testing
-- [ ] **WAIT FOR MISSION CONTROL MANAGER TO PROCEED TO PRESS PROOF.**
+- [ ] Confirm with GSE Manager and Operations Manager what high-pressure behavior is expected during press proof.
+- [ ] Verify that high-pressure gauges respond correctly to any small test actuations commanded during dry run (if performed).
+- [ ] **TELL GSE MANAGER IF ANY UNEXPECTED PRESSURE BEHAVIOR IS OBSERVED DURING DRY RUN.**
 
 ## Press Proof
 - [ ] **BREAK HERE. WAIT FOR OPERATIONS MANAGER TO GIVE THE GO TO BEGIN FLUID/GAS PREP.**
@@ -31,7 +33,7 @@
 ## Fill
 - [ ] **WAIT FOR MISSION CONTROL MANAGER TO PROCEED TO FILL.**
 
-## Fire
+## Hotfire
 - [ ] Close main valve on 6k psi K-bottle once safing command is received.
 - [ ] Verify regulator output pressure begins to decay.
 - [ ] Assist GSE Manager in opening manual hose vent valves to bleed residual line pressure.

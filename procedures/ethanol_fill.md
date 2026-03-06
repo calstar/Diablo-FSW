@@ -11,10 +11,13 @@
 - [ ] **TELL PAD MANAGER / GSE MANAGER ETHANOL FUEL FILL PREP IS READY.**
 
 ## Dry Run & Testing
-- [ ] **WAIT FOR MISSION CONTROL MANAGER TO PROCEED TO PRESS PROOF.**
+- [ ] Review the planned fuel volume and target tank conditions with Operations Manager and Mission Control Manager.
+- [ ] Walk through a verbal dry run of the fill sequence (valve order, QD connect/disconnect, clear zone) with Pad Manager.
+- [ ] Confirm you understand the abort phrase and who to call if a spill or leak occurs.
 
 ## Press Proof
-- [ ] **WAIT FOR MISSION CONTROL MANAGER TO PROCEED TO FILL.**
+- [ ] Confirm with GSE Manager that low-pressure GSE will provide the correct pressurization setpoint for Fuel Fill.
+- [ ] Confirm with Mission Control Manager that telemetry for fuel tank pressure is available and nominal.
 
 ## Fill
 - [ ] **BREAK HERE. WAIT FOR OPERATIONS MANAGER TO GIVE THE GO TO COMMENCE FUEL FILL.**
@@ -63,6 +66,7 @@
 - [ ] Inspect QD and fittings for leaks after disconnect.
 - [ ] Open fuel transfer tank dump valve to ensure fuel was fully transferred.
 - [ ] **TELL PAD MANAGER FUEL FILL IS COMPLETE AND QD IS UNPLUGGED.**
+- [ ] **TELL MISSION CONTROL MANAGER AND OPERATIONS MANAGER THAT FUEL FILL IS COMPLETE AND TANK PRESSURE IS STABLE AT EXPECTED VALUE.**
 
-## Fire
+## Hotfire
 - [ ] **WAIT FOR MISSION CONTROL MANAGER TO PROCEED TO FIRE.**

@@ -15,17 +15,28 @@
 - [ ] Confirm recording is active before proceeding.
 
 ## Dry Run & Testing
-- [ ] **WAIT FOR MISSION CONTROL MANAGER TO PROCEED TO PRESS PROOF.**
+- [ ] Confirm with Mission Control Manager which camera views are critical for dry run (pad overview, engine close-up, tanks, vents, GSE).
+- [ ] Verify that all requested views are visible and labeled correctly in Mission Control.
+- [ ] Perform a brief motion test (pan/tilt/zoom or drone repositioning) to confirm:
+  - [ ] No blind spots on critical hardware.
+  - [ ] No major glare or occlusion.
+- [ ] **TELL MISSION CONTROL MANAGER WHEN VIDEO COVERAGE IS VERIFIED FOR DRY RUN AND PRESS PROOF.**
 
 ## Press Proof
-- [ ] **WAIT FOR MISSION CONTROL MANAGER TO PROCEED TO FILL.**
+- [ ] Maintain live visual on pressurized hardware (tanks, lines, regulators, vents) during press proof.
+- [ ] Watch specifically for:
+  - [ ] Leaks or unexpected frost.
+  - [ ] Uncommanded motion of lines, valves, or structures.
+  - [ ] Unsafe proximity of personnel to vents or pressurized hardware.
+- [ ] **TELL OPERATIONS MANAGER AND PAD MANAGER IMMEDIATELY IF ANY VISUAL ANOMALY IS OBSERVED DURING PRESS PROOF.**
 
 ## Fill
 - [ ] Real-time monitoring for physical anomalies (e.g., leaks, venting locations, hardware movement).
 - [ ] **TELL LOX FILL OPERATOR UPON VISUAL CONFIRMATION OF LOX FILL.**
 - [ ] Ensure continuous recording.
+ - [ ] **TELL OPERATIONS MANAGER AND PAD MANAGER IF ANY LEAK, ABNORMAL FROST, OR HARDWARE MOTION IS OBSERVED DURING FUEL OR LOX FILL.**
 
-## Fire
+## Hotfire
 - [ ] **BREAK HERE. WAIT FOR HOTFIRE ATTEMPT / IGNITION SEQUENCE FROM MISSION CONTROL.**
 - [ ] Monitor ignition spark and flame establishment.
 - [ ] Monitor main valves opening.

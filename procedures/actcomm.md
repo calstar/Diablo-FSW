@@ -6,6 +6,7 @@
 - [ ] Coordinate with Avionics Manager to ensure all solenoids are correctly wired between the DAQ box and the solenoids.
 - [ ] Verify all solenoids are properly mounted, secured, and use the correct hardware (screws, fittings, and brackets).
 - [ ] Confirm pneumatic supply lines are correctly routed and labeled.
+- [ ] Verify rocket-side and GSE-side pneumatic hoses and actuator harnesses are routed and restrained (no kinks, no abrasion, clear of pinch points, hot surfaces, vents, and moving hardware).
 - [ ] Verify solenoid valve flow directions match P&ID.
 - [ ] Confirm correct Normally Closed (NC) / Normally Open (NO) state for each valve.
 - [ ] Manually cycle pneumatic actuators to confirm full open/close travel.
@@ -39,7 +40,14 @@
 - [ ] **TELL PAD MANAGER ACTCOMM IS SECURE FOR HOTFIRE.**
 
 ## Fill
-- [ ] **WAIT FOR MISSION CONTROL MANAGER TO PROCEED TO FILL.**
+- [ ] Coordinate with Mission Control Manager which states will be used during Fuel Fill and LOX Fill.
+- [ ] Monitor actuators during each fill-related state transition to confirm:
+  - [ ] Only the intended valves move.
+  - [ ] All fill, vent, and isolation valves reach full open/closed positions as commanded.
+- [ ] Call out any unexpected motion or failure to move immediately to Mission Control Manager and Pad Manager.
 
-## Fire
-- [ ] **WAIT FOR MISSION CONTROL MANAGER TO PROCEED TO FIRE.**
+## Hotfire
+- [ ] During hotfire sequence, monitor actuator indications and any visible hardware to confirm:
+  - [ ] Main valves open and close as commanded.
+  - [ ] Abort command drives valves to safe positions.
+- [ ] **TELL MISSION CONTROL MANAGER IMMEDIATELY IF ANY ACTUATOR FAILS TO MEET COMMANDED STATE OR IF UNCOMMANDED MOTION IS OBSERVED.**

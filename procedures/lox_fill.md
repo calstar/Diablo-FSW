@@ -16,13 +16,18 @@
 - [ ] **CONFIRM PREP SIGNAL WITH SAFETY OFFICER / CONTROL SYSTEM OFFICER (DAQ power energized, signal continuity/comms check).**
 
 ## Dry Run & Testing
-- [ ] **WAIT FOR MISSION CONTROL MANAGER TO PROCEED TO PRESS PROOF.**
+- [ ] Review cryogenic hazard zones and PPE requirements with Operations Manager and Pad Manager.
+- [ ] Confirm with GSE Manager which lines and regulators will be used for LOX Fill.
+- [ ] Walk through a brief verbal dry run (connection order, valve order, venting order) with Pad Manager.
 
 ## Press Proof
-- [ ] **WAIT FOR MISSION CONTROL MANAGER TO PROCEED TO FILL.**
+- [ ] Confirm with Mission Control Manager and GSE Manager that Press Proof is complete and that LOX-side hardware behaved nominally.
+- [ ] Inspect LOX-side fittings, valves, and lines for any signs of frost damage or leaks after press proof venting.
 
 ## Fill
 - [ ] **BREAK HERE. WAIT FOR OPERATIONS MANAGER TO GIVE THE GO TO BEGIN CRYOGEN FILL.**
+
+### Prechill (line and tank interface conditioning)
 - [ ] Pre-chill all fittings on the line and ensure there is no water or anythin in the way. Ensure the lox line has been purged completely.
 - [ ] Verify starting valve alignments:
       - [ ] Fill line vent valve: **CLOSED**
@@ -43,6 +48,11 @@
             - [ ] Disconnect fill line from tank fill valve.
             - [ ] Drain tank through connected GSE dump valve.
             - [ ] Tighten fittings and re-attempt fill.
+- [ ] When uniform frost is observed on line, QD, and tank-side valve body with no leaks and all valves remain free:
+      - [ ] **TELL PAD MANAGER AND OPERATIONS MANAGER LOX PRECHILL IS COMPLETE AND HARDWARE LOOKS NOMINAL.**
+      - [ ] **TELL MISSION CONTROL MANAGER LOX LINE AND TANK INTERFACE ARE PRECHILLED AND READY FOR FINAL LOX FILL.**
+### Final LOX Fill
+- [ ] On GO from Operations Manager and Mission Control Manager, continue LOX fill per the following steps.
 - [ ] Fill LOX tank until LOX vents from tank vent valve. 
 - [ ] Close LOX fill line main valve.
 - [ ] Instruct operator to end oxidizer fill and return to **ARMED**.
@@ -56,6 +66,7 @@
 - [ ] Process QD disconnect (use QD Disconnect Piston if installed).
 - [ ] Inspect fittings post-disconnect for frost damage or leakage.
 - [ ] **TELL PAD MANAGER / MISSION CONTROL LOX FILL IS COMPLETE.**
+- [ ] **TELL OPERATIONS MANAGER THAT LOX FILL IS COMPLETE AND LOX SYSTEM IS IN THE EXPECTED PRE-HOTFIRE CONFIGURATION.**
 
-## Fire
+## Hotfire
 - [ ] **WAIT FOR MISSION CONTROL MANAGER TO PROCEED TO FIRE.**

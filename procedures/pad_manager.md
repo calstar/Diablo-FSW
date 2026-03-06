@@ -9,15 +9,22 @@
 - [ ] **TELL OPERATIONS MANAGER (SAFETY) PAD IS READY FOR SAFETY OFFICER CHECKOFFS.**
 - [ ] Clear extraneous materials and personnel from static fire pad.
 - [ ] Secure non-essential gauges, hose lines, and avionics harnessing.
+- [ ] Verify rocket-side hoses, rigid lines, and avionics harnessing are routed per plan/P&ID and secured (no kinks or abrasion, clear of walk paths, vents, hot surfaces, and moving hardware).
 - [ ] Confirm propellant tanks and pressurized bottles are strapped down.
 - [ ] All rocket sections should be secured firmly to the struts to the I-beam.
 - [ ] Confirm relief valve outlets are directed away from personnel and property.
 - [ ] Confirm GSE is set up safely with GSE Manager.
 - [ ] Establish and maintain main contact with Mission Control Manager.
 - [ ] **TELL MISSION CONTROL MANAGER PAD IS SECURE.**
+- [ ] Confirm with Operations Manager that pad hazard boundaries and evacuation routes are understood by all pad personnel.
 
 ## Dry Run & Testing
-- [ ] **WAIT FOR MISSION CONTROL MANAGER TO PROCEED TO PRESS PROOF.**
+- [ ] Confirm all pad-side hardware used in dry run (valves, QDs, hoses) is in the correct initial state.
+- [ ] Ensure only essential pad personnel are present for dry run and all are in required PPE.
+- [ ] Coordinate with Mission Control Manager on which actuations will be performed during dry run.
+- [ ] Visually confirm that commanded actuations from Mission Control produce the expected valve/actuator motion on pad.
+- [ ] Call out any unexpected motion, leaks, or interference immediately to Operations Manager and Mission Control Manager.
+- [ ] After dry run completion, **TELL OPERATIONS MANAGER AND MISSION CONTROL MANAGER WHETHER PAD IS GO OR NO-GO FOR PRESS PROOF.**
 
 ## Press Proof
 - [ ] Confirm all QDs are properly seated.
@@ -29,6 +36,7 @@
 - [ ] Check all solenoids, ball valves, and more and ensure there are no leaks
 - [ ] Make sure no personnel are near any vents.
 - [ ] Vent the entire system.
+- [ ] **TELL MISSION CONTROL MANAGER PAD PRESS PROOF IS COMPLETE AND SYSTEM HAS BEEN VENTED.**
 
 ## Fill
 - [ ] **BREAK HERE. WAIT FOR OPERATIONS MANAGER TO GIVE THE GO TO BEGIN FUEL FILL.**
@@ -49,8 +57,10 @@
 - [ ] Confirm transfer line vented prior to disconnect.
 - [ ] Look for clear signs of gas venting to determine fill level. Once the gas is venting a lot, close lox fill.
 - [ ] **BREAK HERE. WAIT FOR LOX FILL OPERATOR TO CONFIRM FILL.**
+- [ ] After each fill (fuel, then LOX), confirm with Mission Control Manager that system state matches expected state (e.g., **Armed**) and pad-side valves/lines are in the correct configuration.
+- [ ] **TELL OPERATIONS MANAGER AND MISSION CONTROL MANAGER WHEN PAD FLUID OPERATIONS (FUEL AND LOX) ARE COMPLETE AND PAD IS CONFIGURED FOR HOTFIRE.**
 
-## Fire
+## Hotfire
 - [ ] **TELL MISSION CONTROL MANAGER ALL PAD TEAMS ARE CLEAR.**
 - [ ] If all sensors and readings are good, continue to hotfire. Calibrate, ready, and fire.
 - [ ] **BREAK HERE. WAIT FOR HOTFIRE COMPLETION.**

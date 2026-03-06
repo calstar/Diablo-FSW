@@ -11,6 +11,10 @@
 - [ ] Check fluid fitting tightness throughout GSE system (do not overtighten).
 - [ ] Check actuator mounts for alignment and slop.
 - [ ] Confirm NPT fittings have proper thread sealant application/taped properly.
+- [ ] Ensure that low press GSE is connected to low press K-bottle. Ensure bottle fitting is **TIGHT**.
+- [ ] Confirm low press GSE vent is closed. 
+- [ ] Open low press K-bottle.
+- [ ] Communicate to mission control manager that low press is ready.
 
 ## Setup & Coordination
 - [ ] **TELL ACTCOMM TO VERIFY PNEUMATIC ACTUATORS.**
@@ -24,7 +28,7 @@
 - [ ] Ensure the lox fill line is connected to the dewar.
 - [ ] Confirm QDs are properly seated and locked.
 - [ ] Confirm vent lines are routed away from personnel and equipment.
-- [ ] Set System and GSE fluid valves to safe starting state.
+- [ ] Set system and GSE fluid valves to safe starting state.
 - [ ] **TELL PAD MANAGER GSE IS READY FOR PRESSURIZATION HAZARD CHECK/SAFETY OFFICER CHECKOFFS.**
 
 ## Pressurization Setup

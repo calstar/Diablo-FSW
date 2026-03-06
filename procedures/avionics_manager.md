@@ -3,6 +3,7 @@
 *Role: Main manager of all electrical systems. Oversees power systems, DAQ, and maintains coordination with Mission Control Manager.*
 
 ## Setup
+- [ ] Confirm reasonable ambient readings across: - [ ] 7 PTs - [ ] 3 HPTs - [ ] 3 LCs - [ ] 4 TCs - [ ] 4 RTDs
 - [ ] Inspect overall setup of electrical power systems: 2 PT boards, load cells, 2 actuator boards (12 volt & 24 volt), TC board, RTD board, and power distribution board.
 - [ ] Confirm that the 12 volt solenoids are plugged into the 12 volt board.
 - [ ] Confirm that the 24 volt solenoids are plugged into the 24 volt board. 
@@ -34,6 +35,9 @@
 
 ## Fill 
 - [ ] Monitor all current and voltage levels of the system during fill. Ensure all states are actuating correctly.
+- [ ] Monitor temperature sensors for abnormal rise.
+- [ ] Watch for sensor dropouts or frozen values.
+- [ ] Watch for pressure oscillations or rapid deviations.
 - [ ] **HOLD DURING FILL UNTIL GIVEN THE GO BY MISSION CONTROL MANAGER.**
 
 ## Hotfire  

@@ -8,7 +8,6 @@ import { getWebSocketClient } from '@/lib/websocket';
 import { MessageType, SensorUpdate } from '@/lib/types';
 import { getStartupTime } from '@/lib/startup-time';
 import { getDataCache } from '@/lib/data-cache';
-import { getServerTimeNow } from '@/lib/server-time';
 
 interface TimeSeriesPlotProps {
   title: string;
@@ -167,7 +166,7 @@ export default function TimeSeriesPlot({
         x: {
           time: false,
           range: (): [number, number] => {
-            const now = (getServerTimeNow() - startTimeRef.current) / 1000;
+            const now = (Date.now() - startTimeRef.current) / 1000;
             const window = Math.min(windowSeconds, now + 1);
             return [Math.max(0, now - window), now];
           },
@@ -314,7 +313,7 @@ export default function TimeSeriesPlot({
       // Re-check cache right before init to get latest data
       loadCacheData();
 
-      const now = (getServerTimeNow() - startTimeRef.current) / 1000;
+      const now = (Date.now() - startTimeRef.current) / 1000;
 
       // Use cached data if available, otherwise create empty arrays
       let timeData = dataRef.current.time.length > 0 ? dataRef.current.time : [now];
@@ -431,10 +430,10 @@ export default function TimeSeriesPlot({
         return;
       }
 
-      const now = (getServerTimeNow() - startTimeRef.current) / 1000;
+      const now = (Date.now() - startTimeRef.current) / 1000;
       const cutoff = now - windowSeconds;
       const d = dataRef.current;
-      const currentTime = getServerTimeNow();
+      const currentTime = Date.now();
       let dataChanged = false;
 
       // Update data at 10 Hz (only when needed)

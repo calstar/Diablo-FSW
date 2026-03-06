@@ -91,16 +91,31 @@ export default function IpadDashboard() {
 
     useEffect(() => {
         ws.connect();
+        try {
+            startDataCache(); // Start history cache
+        } catch (err) {
+            console.error('[IpadDashboard] Failed to start data cache:', err);
+        }
 
+        // Subscribe to sensor updates - ensure we receive all updates
+        const u1 = ws.on(MessageType.SENSOR_UPDATE, (p: unknown) => {
+            const update = p as SensorUpdate;
+            updateSensor(update);
+        });
+        const u2 = ws.on(MessageType.STATE_UPDATE, (p: unknown) => updateState(p as StateUpdate));
+        const u3 = ws.on(MessageType.ACTUATOR_UPDATE, (p: unknown) => updateActuator(p as ActuatorUpdate));
+        const u4 = ws.on(MessageType.ACTUATOR_EXPECTED_POSITIONS_UPDATE, (p: unknown) => {
+            const payload = p as Record<number, Record<string, 'open' | 'closed' | null>>;
+            useSensorStore.getState().updateActuatorExpectedPositions(payload);
+        });
+        const u5 = ws.onConnectionStatus((s) => updateConnectionStatus(s));
         const u6 = ws.on(MessageType.CONFIG_UPDATED, () => {
             loadActuatorsFromConfig();
             loadPressureSensors();
         });
 
-        return () => {
-            u6();
-        };
-    }, [ws, loadActuatorsFromConfig, loadPressureSensors]);
+        return () => { u1(); u2(); u3(); u4(); u5(); u6(); };
+    }, [ws, updateSensor, updateState, updateActuator, updateConnectionStatus, loadActuatorsFromConfig, loadPressureSensors]);
 
     const isFireState = currentState === SystemState.FIRE;
     const effectivePressureSensorsPlot = pressureSensorsPlot.length > 0 ? pressureSensorsPlot : FALLBACK_PRESSURE_SENSORS_PLOT;

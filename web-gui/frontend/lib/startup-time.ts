@@ -6,13 +6,11 @@
  * Priority: Backend missionStartTime > localStorage fallback > current time
  */
 
-import { getServerTimeNow } from './server-time';
-
 const LS_KEY = 'diablo_daq_startup_ms';
 
 /** Get the global startup timestamp (ms since epoch) from backend or fallback. */
 export function getStartupTime(): number {
-  if (typeof window === 'undefined') return getServerTimeNow();
+  if (typeof window === 'undefined') return Date.now();
 
   // Try to get from Zustand store (backend's mission start time)
   try {
@@ -34,16 +32,16 @@ export function getStartupTime(): number {
   }
 
   // Last resort: current time (shouldn't happen if backend is working)
-  return getServerTimeNow();
+  return Date.now();
 }
 
 /** Reset mission T+0 (e.g. when user manually resets). */
 export function resetStartupTime(): void {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(LS_KEY, String(getServerTimeNow()));
+  localStorage.setItem(LS_KEY, String(Date.now()));
 }
 
 /** Elapsed seconds since T+0 */
 export function elapsedSeconds(): number {
-  return (getServerTimeNow() - getStartupTime()) / 1000;
+  return (Date.now() - getStartupTime()) / 1000;
 }

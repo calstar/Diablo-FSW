@@ -11,7 +11,6 @@ import { useSensorStore, ALIASES } from './store';
 import { getStartupTime } from './startup-time';
 import { getWebSocketClient } from './websocket';
 import { MessageType } from './types';
-import { getServerTimeNow } from './server-time';
 
 const CACHE_SAMPLE_HZ = 30; // 30 Hz to match backend broadcast rate
 const CACHE_MAX_SECONDS = 300; // 5 minutes of history
@@ -44,7 +43,7 @@ class SensorDataCache {
     ws.on(MessageType.HISTORICAL_DATA, (payload: unknown) => {
       try {
         const data = payload as Record<string, { time: number[]; values: number[] }>;
-        const frontendNow = (getServerTimeNow() - getStartupTime()) / 1000;
+        const frontendNow = (Date.now() - getStartupTime()) / 1000;
         let count = 0;
         for (const [key, series] of Object.entries(data)) {
           if (series.time && series.values && series.time.length > 0) {
@@ -78,7 +77,7 @@ class SensorDataCache {
 
   private sample(): void {
     try {
-      const now = (getServerTimeNow() - getStartupTime()) / 1000;
+      const now = (Date.now() - getStartupTime()) / 1000;
       const state = useSensorStore.getState();
       if (!state || !state.sensorData) return;
       const sensorData = state.sensorData;
@@ -115,7 +114,7 @@ class SensorDataCache {
   addDataPoint(entity: string, component: string, value: number): void {
     if (!isFinite(value)) return;
     const key = `${entity}.${component}`;
-    const now = (getServerTimeNow() - getStartupTime()) / 1000;
+    const now = (Date.now() - getStartupTime()) / 1000;
 
     let series = this.cache.get(key);
     if (!series) {
@@ -207,7 +206,7 @@ class SensorDataCache {
     componentMap: string[],
     windowSeconds: number,
   ): { time: number[]; values: number[][] } | null {
-    const now = (getServerTimeNow() - getStartupTime()) / 1000;
+    const now = (Date.now() - getStartupTime()) / 1000;
     const cutoff = now - windowSeconds;
 
     const keys = entities.map((e, i) => `${e}.${componentMap[i]}`);

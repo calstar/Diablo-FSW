@@ -1312,7 +1312,7 @@ class SensorSystemServer {
             stopContinuousActuatorCommands(this);
             this.manuallyCommandedChannels.clear();
             const enumKey = SystemState[newState] ?? 'IDLE';
-            forwardStateToActuatorService(enumKey, this.actuatorServicePort).catch(() => {});
+            forwardStateToActuatorService(enumKey, this.actuatorServicePort).catch(() => { });
           } else if (this.debugMode) {
             stopContinuousActuatorCommands(this);
             this.manuallyCommandedChannels.clear();
@@ -1344,10 +1344,10 @@ class SensorSystemServer {
           if (newState === SystemState.FIRE) {
             console.log('🎯 FIRE state entered – sending FIRE_START to C++ controller service');
             if (this.controllerServicePort > 0) {
-              forwardFireStateToControllerService(true, this.controllerServicePort).catch(() => {});
+              forwardFireStateToControllerService(true, this.controllerServicePort).catch(() => { });
             }
           } else if (this.controllerServicePort > 0) {
-            forwardFireStateToControllerService(false, this.controllerServicePort).catch(() => {});
+            forwardFireStateToControllerService(false, this.controllerServicePort).catch(() => { });
           }
 
           // Abort UDP broadcasts (ABORT / ABORT_DONE)
@@ -1358,7 +1358,7 @@ class SensorSystemServer {
             newState === SystemState.ABORT;
           if (isAbortState) {
             if (this.controllerServicePort > 0) {
-              forwardFireStateToControllerService(false, this.controllerServicePort).catch(() => {});
+              forwardFireStateToControllerService(false, this.controllerServicePort).catch(() => { });
             }
             if (this.abortDoneTimer) {
               clearTimeout(this.abortDoneTimer);
@@ -1384,7 +1384,7 @@ class SensorSystemServer {
               if (ok) {
                 const boardInfo = getActuatorBoardInfo(this, commandActuatorName);
                 if (boardInfo) this.manuallyCommandedChannels.add(`${boardInfo.channel}@${boardInfo.boardIp}`);
-                this.broadcast({ type: MessageType.ACTUATOR_UPDATE, timestamp: Date.now(), payload: { name: commandActuatorName, state: actuatorState, rawAdcCounts: 0, timestamp: Date.now() } as ActuatorUpdate });
+                this.broadcast({ type: MessageType.ACTUATOR_UPDATE, timestamp: Date.now(), payload: { name: commandActuatorName, state: actuatorState, rawAdcCounts: 0, timestamp: Date.now(), isCommand: true } as ActuatorUpdate });
               } else {
                 const boardInfo = getActuatorBoardInfo(this, commandActuatorName);
                 if (boardInfo) {
@@ -1392,7 +1392,7 @@ class SensorSystemServer {
                   const hardwareState = guiStateToHardwareState(open ? 1 : 0, actuatorType);
                   this.manuallyCommandedChannels.add(`${boardInfo.channel}@${boardInfo.boardIp}`);
                   const success = sendActuatorCommandUDP(this, boardInfo.channel, hardwareState, boardInfo.boardIp);
-                  if (success) this.broadcast({ type: MessageType.ACTUATOR_UPDATE, timestamp: Date.now(), payload: { name: commandActuatorName, state: actuatorState, rawAdcCounts: 0, timestamp: Date.now() } as ActuatorUpdate });
+                  if (success) this.broadcast({ type: MessageType.ACTUATOR_UPDATE, timestamp: Date.now(), payload: { name: commandActuatorName, state: actuatorState, rawAdcCounts: 0, timestamp: Date.now(), isCommand: true } as ActuatorUpdate });
                 }
               }
             });
@@ -1406,7 +1406,7 @@ class SensorSystemServer {
             this.manuallyCommandedChannels.add(`${channelId}@${boardIp}`);
             const success = sendActuatorCommandUDP(this, channelId, hardwareState, boardIp);
             if (success) {
-              this.broadcast({ type: MessageType.ACTUATOR_UPDATE, timestamp: Date.now(), payload: { name: commandActuatorName, state: actuatorState, rawAdcCounts: 0, timestamp: Date.now() } as ActuatorUpdate });
+              this.broadcast({ type: MessageType.ACTUATOR_UPDATE, timestamp: Date.now(), payload: { name: commandActuatorName, state: actuatorState, rawAdcCounts: 0, timestamp: Date.now(), isCommand: true } as ActuatorUpdate });
             }
           }
         }

@@ -298,9 +298,15 @@ export const useSensorStore = create<SensorSystemState>((set, get) => ({
     set((state) => {
       const actuators = new Map(state.actuators);
       if (update.actuatorId != null) actuators.set(update.actuatorId, update);
+
+      const nextOverrides = { ...state.actuatorCommandedOverrides };
+      if (state.debugMode && update.isCommand) {
+        nextOverrides[entity] = update.state;
+      }
       return {
         actuators,
         actuatorStateByEntity: { ...state.actuatorStateByEntity, [entity]: update.state },
+        actuatorCommandedOverrides: nextOverrides,
       };
     });
   },

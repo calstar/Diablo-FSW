@@ -140,7 +140,7 @@ export default function MobileDashboard() {
           })
         );
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   // ── Derived state ─────────────────────────────────────────────────────────
@@ -181,9 +181,8 @@ export default function MobileDashboard() {
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <span className="text-base font-bold tracking-widest text-blue-400 uppercase">DIABLO DAQ</span>
-            <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
-              isFullyConnected ? 'bg-green-500' : connected ? 'bg-yellow-500' : 'bg-red-500'
-            }`} />
+            <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${isFullyConnected ? 'bg-green-500' : connected ? 'bg-yellow-500' : 'bg-red-500'
+              }`} />
             <span className="text-xs text-gray-400">{isFullyConnected ? 'Connected' : connected ? 'WS Only' : 'Disconnected'}</span>
           </div>
           <div className="flex items-center gap-3">
@@ -202,13 +201,12 @@ export default function MobileDashboard() {
               ws.sendCommand({ commandType: 'debug_mode', data: { debugMode: next } });
             }}
             disabled={!controlEnabled}
-            className={`px-3 py-2 rounded text-xs font-bold uppercase tracking-wider border transition-all flex-shrink-0 ${
-              !controlEnabled
-                ? 'bg-gray-900 border-gray-800 text-gray-600 cursor-not-allowed'
-                : debugMode
-                  ? 'bg-yellow-800/60 border-yellow-600 text-yellow-300'
-                  : 'bg-gray-800 border-gray-700 text-gray-500'
-            }`}
+            className={`px-3 py-2 rounded text-xs font-bold uppercase tracking-wider border transition-all flex-shrink-0 ${!controlEnabled
+              ? 'bg-gray-900 border-gray-800 text-gray-600 cursor-not-allowed'
+              : debugMode
+                ? 'bg-yellow-800/60 border-yellow-600 text-yellow-300'
+                : 'bg-gray-800 border-gray-700 text-gray-500'
+              }`}
             title={controlEnabled ? undefined : 'Viewer mode: controls locked'}
           >
             {debugMode ? '🔓 DEBUG' : '🔒 SAFE'}
@@ -261,11 +259,10 @@ export default function MobileDashboard() {
                 <button
                   key={w.label}
                   onClick={() => setTimeWindow(w.seconds)}
-                  className={`px-2 py-1 text-xs font-semibold rounded transition-all ${
-                    timeWindow === w.seconds
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                  }`}
+                  className={`px-2 py-1 text-xs font-semibold rounded transition-all ${timeWindow === w.seconds
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                    }`}
                 >
                   {w.label}
                 </button>

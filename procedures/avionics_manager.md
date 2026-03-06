@@ -3,12 +3,20 @@
 *Role: Main manager of all electrical systems. Oversees power systems, DAQ, and maintains coordination with Mission Control Manager.*
 
 ## Setup
-- [ ] Inspect overall setup of electrical power systems: 2 PT boards, load cells, 2 actuator boards (12 volt & 24 volt), TC board, RTD board, and power distribution board.
+- [ ] Verify DAQ system is physically secured and powered correctly.
+- [ ] Ensure DAQ system is protected from environmental and system constraints.
+- [ ] Confirm power supplies are set to correct voltage/current limits.
+- [ ] Connect DAQ box to power.
+- [ ] Ensure breaker clicks and all boards are displaying LEDs to ensure power is on.
+- [ ] Turn DAQ system off and plug in all harnessing.
+- [ ] Route all avionics harnessing to the right connections (boardside).
+- [ ] Route all harnessing to be clear of system.
+- [ ] Check in on Mission Control Manager to ensure calibrated data is coming in accurately.
+- [ ] Check with Mission Control Manager to ensure no free-hanging connectors on system.
+- [ ] Communicate with Actuator Control Manager on actuator mapping.
 - [ ] Confirm reasonable ambient readings across: - [ ] 7 PTs - [ ] 3 HPTs - [ ] 3 LCs - [ ] 4 TCs - [ ] 4 RTDs
 - [ ] Confirm that the 12 volt solenoids are plugged into the 12 volt board.
 - [ ] Confirm that the 24 volt solenoids are plugged into the 24 volt board. 
-- [ ] Verify DAQ system is physically secured and powered correctly.
-- [ ] Confirm power supplies are set to correct voltage/current limits.
 - [ ] Ensure DAQ POWER harness is disconnected prior to energizing supply.
 - [ ] Ensure telemetry is connected. 
 - [ ] Ensure actuator control wiring is secure and correctly wired. Limit exposure of wires to the environment using sheathing.
@@ -22,15 +30,22 @@
 - [ ] Confirm the power supply is operating in constant voltage mode.
 - [ ] Ensure the DAQ briefcase is operating properly.
 - [ ] Confirm the valve actuation commands register properly.
+- [ ] Connect the RTD to the RTD harness.
+- [ ] Visually verify that TCs in the chamber are secure.
 
 ## Press Proof
+- [ ] Communicate with Mission Control Manager and Actuator Control Manager to ensure that the actuators are registering the controls accurately and nominal behavior is seen across boards. 
+- [ ] Ensure that the board temperature and system behavior are nominal during press proof.
 - [ ] Confirm that all valve actuation commands register properly.
 - [ ] Confirm the pressure is at an acceptable value at 600 psi .
 - [ ] Ensure that all sensors are operating appropriately.
 
 ## Dry Run + Testing  
+- [ ] Ensure that no harnessing is under tension and all harnessing tensions are solid.
 - [ ] Coordinate dry run with ECOMM and ACTCOMM.
 - [ ] Communicate board status and performance with Mission Control Manager.
+- [ ] Ensure data rates and sensors are all reading appropriate values with no spikes.
+- [ ] Monitor power consumption during fill and pressurization.
 - [ ] Ensure that all states actuate the proper solenoids and ball valves.
 - [ ] Confirm that all valve actuation commands register properly.
 - [ ] Confirm that the **ABORT SYSTEM** opens the tank vents.
@@ -38,15 +53,13 @@
 - [ ] **TELL MISSION CONTROL MANAGER AVIONICS SIGNAL IS NOMINAL.**
 
 ## Fill 
+- [ ] Communicate with Mission Control Manager on board status. 
 - [ ] Monitor all current and voltage levels of the system during fill. Ensure all states are actuating correctly.
 - [ ] Monitor temperature sensors for abnormal rise.
 - [ ] Watch for sensor dropouts or frozen values.
 - [ ] Watch for pressure oscillations or rapid deviations.
-- [ ] **HOLD DURING FILL UNTIL GIVEN THE GO BY MISSION CONTROL MANAGER.**
 
 ## Hotfire  
-- [ ] Ensure data rates and sensors are all reading appropriate values with no spikes. 
-- [ ] Monitor power consumption during fill and pressurization.
 - [ ] **TELL MISSION CONTROL MANAGER AVIONICS IS STEADY FOR IGNITION.**
 - [ ] Remain prepared to de-energize immediately upon ABORT call.
 - [ ] **BREAK HERE. WAIT FOR MISSION CONTROL MANAGER TO TELL YOU TO DE-ENERGIZE WHEN SAFE.**

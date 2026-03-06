@@ -9,7 +9,7 @@
 - [ ] Connect the high-pressure K-bottle to GSE inlet.
 - [ ] Tighten fittings to proper torque (do not overtighten).
 - [ ] Slowly open the valve to check for leaks, then close.
-- [ ] Set high-pressure regulator to required operating parameter (e.g., **4500 psi** per procedure).
+- [ ] Set high-pressure regulator to required operating parameter (e.g., **4000 psi** per procedure).
 - [ ] Confirm regulator output using downstream (outlet) pressure gauge.
 - [ ] **TELL GSE MANAGER HIGH PRESSURE K-BOTTLE IS SET.**
 

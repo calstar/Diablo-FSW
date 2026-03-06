@@ -8,8 +8,7 @@
 - [ ] Connect and configure DAQ parameters per test configuration.
 - [ ] Verify correct State Machine configuration loaded.
 - [ ] Confirm live telemetry stream visible in Mission Control.
-- [ ] Perform zero-point calibration of all Pressure Transducers.
-- [ ] Verify calibration constants are applied correctly.
+- [ ] Perform zero-point calibration of all pressure transducers and verify the calibration constants are applied correctly.
 - [ ] Confirm reasonable ambient readings across:
       - [ ] 7 PTs
       - [ ] 3 HPTs
@@ -21,7 +20,7 @@
 - [ ] **TELL AVIONICS MANAGER DAQ AND SENSORS ARE FUNCTIONAL.**
 
 ## Dry Run & Data Validation
-- [ ] Run full system dry run in DEBUG mode.
+- [ ] Run full system dry run.
 - [ ] Confirm state transitions reflect correctly in telemetry.
 - [ ] Verify valve state indicators match ACTCOMM feedback.
 - [ ] Trigger and verify failsafe modes:
@@ -44,5 +43,5 @@
 - [ ] Confirm telemetry remains synchronized throughout burn.
 - [ ] Verify all system data files are actively writing during test.
 - [ ] Confirm data files saved successfully after test completion.
-- [ ] Backup data if required.
+- [ ] Backup the data and upload immediately.
 - [ ] **TELL AVIONICS MANAGER TELEMETRY RECORDING IS COMPLETE.**

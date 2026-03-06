@@ -37,7 +37,7 @@
 - [ ] Set the high pressure regulator to 4000 psi.
 - [ ] Confirm pressure gauge reading matches regulator setpoint.
 - [ ] Connect the low pressure K-bottle to GSE.
-- [ ] Set the low pressure regulator to 130 psi.
+- [ ] Set the low pressure regulator to 140 psi.
 - [ ] Confirm low pressure gauge reading matches regulator setpoint.
 - [ ] Check for leaks at all high and low pressure fittings.
 - [ ] Verify all pneumatic hoses are physically connected (coordinate with ACTCOMM).

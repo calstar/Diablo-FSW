@@ -60,23 +60,6 @@ function buildTcChannelsWithRef(boards: Record<string, any>): { entity: string; 
   return out;
 }
 
-/** Build TC entity list with each board's voltage_reference (0=internal, 1=VDD, 2=5V). Uses first TC board's ref when multiple. */
-function buildTcChannelsWithRef(boards: Record<string, any>): { entity: string; label: string; voltageReference: number }[] {
-  const out: { entity: string; label: string; voltageReference: number }[] = [];
-  for (const board of Object.values(boards)) {
-    if (board.type !== 'TC' || board.enabled === false) continue;
-    const ref = Math.min(2, Math.max(0, (board.voltage_reference as number) ?? 0));
-    const active: number[] =
-      Array.isArray(board.active_connectors) && board.active_connectors.length > 0
-        ? (board.active_connectors as number[])
-        : Array.from({ length: (board.num_sensors as number) ?? 10 }, (_, i) => i + 1);
-    for (const ch of active) {
-      out.push({ entity: `TC.CH${ch}`, label: `TC Ch${ch}`, voltageReference: ref });
-    }
-  }
-  return out;
-}
-
 // ── Readout boxes (compact, uniform with other plot pages) ───────────────────────
 
 function DerivedReadoutBox({

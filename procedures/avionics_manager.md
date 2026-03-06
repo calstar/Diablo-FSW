@@ -3,36 +3,42 @@
 *Role: Main manager of all electrical systems. Oversees power systems, DAQ, and maintains coordination with Mission Control Manager.*
 
 ## Setup
-- [ ] Inspect overall setup of electrical power systems.
+- [ ] Inspect overall setup of electrical power systems: 2 PT boards, load cells, 2 actuator boards (12 volt & 24 volt), TC board, RTD board, and power distribution board.
+- [ ] Confirm that the 12 volt solenoids are plugged into the 12 volt board.
+- [ ] Confirm that the 24 volt solenoids are plugged into the 24 volt board. 
 - [ ] Verify DAQ system is physically secured and powered correctly.
 - [ ] Confirm power supplies are set to correct voltage/current limits.
 - [ ] Ensure DAQ POWER harness is disconnected prior to energizing supply.
 - [ ] Ensure telemetry is connected. 
-- [ ] Ensure actuator control wiring is secure and correctly wired.
+- [ ] Ensure actuator control wiring is secure and correctly wired. Limit exposure of wires to the environment using sheathing.
 - [ ] Confirm grounding and environmental protection of harnessing.
 - [ ] Establish direct communication line with Mission Control Manager.
 - [ ] Confirm backup laptops and power sources are available.
 - [ ] **TELL MISSION CONTROL MANAGER ALL ELECTRICAL SYSTEMS ARE SET UP.**
-
-## Dry Run & Testing
 - [ ] **BREAK HERE. WAIT FOR OPERATIONS MANAGER TO GIVE THE GO TO BEGIN.**
 - [ ] Turn on DAQ power upon command. 
 - [ ] Verify DAQ boots up correctly and connects to the telemetry interface.
 - [ ] Confirm the power supply is operating in constant voltage mode.
-- [ ] Conduct a dry run of all the states in coordination with ECOMM and ACTCOMM. Ensure all states actuate the correct solenoids and ball valves.
-- [ ] Confirm all valve actuation commands register properly.
-- [ ] Verify that the **ABORT SYSTEM** opens the tank vents during the dry run.
+- [ ] Ensure the DAQ briefcase is operating properly
+- [ ] Confirm the valve actuation commands register properly
+
+
+## Dry Run + Testing  
+- [ ] Coordinate dry run with ECOMM and ACTCOMM.
+- [ ] Communicate board status and performance with Mission Control Manager.
+- [ ] Ensure that all states actuate the proper solenoids and ball valves.
+- [ ] Confirm that all valve actuation commands register properly.
+- [ ] Confirm that the **ABORT SYSTEM** opens the tank vents.
 - [ ] Confirm no unexpected current spikes.
 - [ ] **TELL MISSION CONTROL MANAGER AVIONICS SIGNAL IS NOMINAL.**
 
-## Press Proof
-- [ ] **WAIT FOR MISSION CONTROL MANAGER TO PROCEED TO FILL.**
+## Fill 
+- [ ] Monitor all current and voltage levels of the system during fill. Ensure all states are actuating correctly.
+- [ ] **HOLD DURING FILL UNTIL GIVEN THE GO BY MISSION CONTROL MANAGER.**
 
-## Fill
+## Hotfire  
 - [ ] Ensure data rates and sensors are all reading appropriate values with no spikes. 
 - [ ] Monitor power consumption during fill and pressurization.
-
-## Fire
 - [ ] **TELL MISSION CONTROL MANAGER AVIONICS IS STEADY FOR IGNITION.**
 - [ ] Remain prepared to de-energize immediately upon ABORT call.
 - [ ] **BREAK HERE. WAIT FOR MISSION CONTROL MANAGER TO TELL YOU TO DE-ENERGIZE WHEN SAFE.**

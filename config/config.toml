@@ -324,7 +324,7 @@ active_connectors = []
 "Fuel Vent"             = ["NO", 2, 12]
 "Fuel Press"            = ["NC", 3, 12]
 "Fuel Main"             = ["NC", 7, 12]
-"LOX Vent"              = ["NO", 6, 12]
+"LOX Vent"              = ["NC", 6, 12]
 "LOX Press"             = ["NO", 8, 12]
 "GSE Low Press Vent"    = ["NC", 5, 12]
 "Fuel Fill Press"       = ["NC", 10, 12]
@@ -456,52 +456,23 @@ csv_paths = []
 # =============================================================================
 # Pressure Limits (for GUI gauges and alarms)
 # =============================================================================
-
-
-[pressure_limits.GN2_High]
-NOP = 4000
-MEOP = 5000
+[pressure_limits.GN2]
+THRESH = 550
+NOP = 900
+MEOP = 950
 POP = 1000
 
-[pressure_limits.GN2_Regulated]
-NOP = 900
-MEOP = 1250
-POP = 9000
-
-[pressure_limits.Fuel_Upstream]
-NOP = 540
+[pressure_limits.ETH]
+THRESH = 550
+NOP = 600
 MEOP = 650
 POP = 750
 
-[pressure_limits.Fuel_Downstream]
-NOP = 540
+[pressure_limits.LOX]
+THRESH = 550
+NOP = 600
 MEOP = 650
 POP = 750
-
-[pressure_limits.Ox_Upstream]
-NOP = 505
-MEOP = 650
-POP = 750
-
-[pressure_limits.Ox_Downstream]
-NOP = 505
-MEOP = 650
-POP = 750
-
-[pressure_limits.GSE_Low]
-NOP = 130
-MEOP = 155
-POP = 800
-
-[pressure_limits.GSE_Mid]
-NOP = 1500
-MEOP = 2000
-POP = 5000
-
-[pressure_limits.GSE_High]
-NOP = 4000
-MEOP = 5000
-POP = 800
 
 # Pressure sensor → fluid system mapping (sensor_id → system)
 [pressure_mappings]

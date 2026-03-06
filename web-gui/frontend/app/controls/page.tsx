@@ -28,7 +28,7 @@ const PRESSURE_SENSORS_PLOT = PRESSURE_SENSORS.map((s) => ({
 export default function ControlsPage() {
   const ws = getWebSocketClient();
   const updateSensor = useSensorStore((state) => state.updateSensor);
-  const updateState = useSensorStore((state) => state.updateState);
+  const updateState  = useSensorStore((state) => state.updateState);
   const updateActuator = useSensorStore((s) => s.updateActuator);
   const updateActuatorExpectedPositions = useSensorStore((s) => s.updateActuatorExpectedPositions);
   const { actuators: actuatorsFromConfig, loading: actuatorsLoading } = useActuatorsFromConfig();

@@ -51,8 +51,13 @@ export default function UnifiedDashboard() {
   const loadActuatorsFromConfig = useCallback(() => {
     fetch('/api/config')
       .then((r) => (r.ok ? r.json() : null))
-      .then((data: { config?: { actuator_roles?: Record<string, any> } } | null) => {
-        const roles = data?.config?.actuator_roles;
+      .then((data: { config?: { actuator_roles?: Record<string, any>; adc?: { internal_v?: number; absolute_5v_v?: number } } } | null) => {
+        const config = data?.config;
+        const adc = config?.adc;
+        if (adc && typeof adc.internal_v === 'number' && typeof adc.absolute_5v_v === 'number') {
+          useSensorStore.getState().setVoltageRefNominals({ internalV: adc.internal_v, absolute5vV: adc.absolute_5v_v });
+        }
+        const roles = config?.actuator_roles;
         if (!roles || typeof roles !== 'object') return;
         setActuatorsFromConfig(
           Object.entries(roles).map(([name, value]) => {
@@ -91,31 +96,16 @@ export default function UnifiedDashboard() {
 
   useEffect(() => {
     ws.connect();
-    try {
-      startDataCache(); // Start history cache
-    } catch (err) {
-      console.error('[UnifiedDashboard] Failed to start data cache:', err);
-    }
 
-    // Subscribe to sensor updates - ensure we receive all updates
-    const u1 = ws.on(MessageType.SENSOR_UPDATE, (p: unknown) => {
-      const update = p as SensorUpdate;
-      updateSensor(update);
-    });
-    const u2 = ws.on(MessageType.STATE_UPDATE, (p: unknown) => updateState(p as StateUpdate));
-    const u3 = ws.on(MessageType.ACTUATOR_UPDATE, (p: unknown) => updateActuator(p as ActuatorUpdate));
-    const u4 = ws.on(MessageType.ACTUATOR_EXPECTED_POSITIONS_UPDATE, (p: unknown) => {
-      const payload = p as Record<number, Record<string, 'open' | 'closed' | null>>;
-      useSensorStore.getState().updateActuatorExpectedPositions(payload);
-    });
-    const u5 = ws.onConnectionStatus((s) => updateConnectionStatus(s));
     const u6 = ws.on(MessageType.CONFIG_UPDATED, () => {
       loadActuatorsFromConfig();
       loadPressureSensors();
     });
 
-    return () => { u1(); u2(); u3(); u4(); u5(); u6(); };
-  }, [ws, updateSensor, updateState, updateActuator, updateConnectionStatus, loadActuatorsFromConfig, loadPressureSensors]);
+    return () => {
+      u6();
+    };
+  }, [ws, loadActuatorsFromConfig, loadPressureSensors]);
 
   const isFireState = currentState === SystemState.FIRE;
   const effectivePressureSensorsPlot = pressureSensorsPlot.length > 0 ? pressureSensorsPlot : FALLBACK_PRESSURE_SENSORS_PLOT;
@@ -141,8 +131,8 @@ export default function UnifiedDashboard() {
                       console.log(`[UnifiedDashboard] Time window changed to ${newWindow}s`);
                     }}
                     className={`px-2 py-0.5 text-xs font-semibold rounded transition-all ${timeWindow === w.seconds
-                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
-                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300'
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
+                        : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300'
                       }`}
                   >
                     {w.label}
@@ -221,7 +211,7 @@ function ControllerStatusDisplay() {
         <span className="text-xs text-text-muted">Fuel:</span>
         <span className="text-sm font-mono font-bold text-blue-400">{fuelDuty.toFixed(1)}%</span>
         <span className={`text-xs px-2 py-0.5 rounded ${fuelOn ? 'bg-green-900/50 text-green-400 border border-green-800' :
-          'bg-gray-900/50 text-gray-500 border border-gray-800'
+            'bg-gray-900/50 text-gray-500 border border-gray-800'
           }`}>
           {fuelOn ? 'ON' : 'OFF'}
         </span>
@@ -230,7 +220,7 @@ function ControllerStatusDisplay() {
         <span className="text-xs text-text-muted">Ox:</span>
         <span className="text-sm font-mono font-bold text-red-400">{oxDuty.toFixed(1)}%</span>
         <span className={`text-xs px-2 py-0.5 rounded ${oxOn ? 'bg-green-900/50 text-green-400 border border-green-800' :
-          'bg-gray-900/50 text-gray-500 border border-gray-800'
+            'bg-gray-900/50 text-gray-500 border border-gray-800'
           }`}>
           {oxOn ? 'ON' : 'OFF'}
         </span>

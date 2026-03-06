@@ -114,7 +114,6 @@ export interface ActuatorUpdate {
   state: ActuatorState;
   rawAdcCounts: number;
   timestamp: number;
-  isCommand?: boolean;
 }
 
 // State machine update payload

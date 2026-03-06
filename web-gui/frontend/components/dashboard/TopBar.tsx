@@ -9,7 +9,6 @@ import PressureBar from '@/components/plots/PressureBar';
 import { PRESSURE_BAR_SENSORS, getEntityColor } from '@/lib/sensor-colors';
 import NotificationPanel from '@/components/dashboard/NotificationPanel';
 import { useControlMode } from '@/lib/control-mode';
-import { usePressureLimits, getLimitsForSystem } from '@/lib/pressure-limits';
 
 const STATE_NAMES: Record<number, string> = {
   0: 'DEBUG', 1: 'IDLE', 2: 'ARMED', 3: 'FUEL FILL', 4: 'OX FILL',
@@ -78,8 +77,6 @@ export default function TopBar() {
   const [passwordInput, setPasswordInput] = useState('');
   const [showUnlockForm, setShowUnlockForm] = useState(false);
 
-  const pressureLimits = usePressureLimits();
-
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
     connected: false, elodinConnected: false,
   });
@@ -92,20 +89,15 @@ export default function TopBar() {
 
   const loadPressureBars = useCallback(() => {
     // Use PRESSURE_BAR_SENSORS (femboy-style) so GN2 High and all canonical sensors always appear
-    const bars: PressureBarDef[] = PRESSURE_BAR_SENSORS.map((s) => {
-      const systemName = s.label.replace(/ /g, '_');
-      const limits = getLimitsForSystem(pressureLimits, systemName);
-
-      return {
-        label: SHORT_LABELS[s.entity] ?? s.label,
-        entity: s.entity,
-        nop: limits.NOP ?? s.nop,
-        meop: limits.MEOP ?? s.meop,
-        color: getEntityColor(s.entity),
-      };
-    });
+    const bars: PressureBarDef[] = PRESSURE_BAR_SENSORS.map((s) => ({
+      label: SHORT_LABELS[s.entity] ?? s.label,
+      entity: s.entity,
+      nop: s.nop,
+      meop: s.meop,
+      color: getEntityColor(s.entity),
+    }));
     setPressureBars(bars);
-  }, [pressureLimits]);
+  }, []);
 
   useEffect(() => {
     loadPressureBars();
@@ -293,14 +285,15 @@ export default function TopBar() {
                 ws.sendCommand(cmd);
               }}
               disabled={!controlEnabled}
-              className={`w-full py-2 xl:py-4 rounded-xl text-[10px] xl:text-sm font-bold uppercase tracking-wider border transition-all text-center ${debugMode
-                ? controlEnabled
-                  ? 'bg-yellow-800/60 border-yellow-600 text-yellow-300 shadow-[0_0_6px_rgba(234,179,8,0.3)]'
-                  : 'bg-yellow-900/40 border-yellow-800 text-yellow-700 cursor-not-allowed'
-                : controlEnabled
-                  ? 'bg-gray-800 border-gray-700 text-gray-500 hover:border-gray-500'
-                  : 'bg-gray-900 border-gray-800 text-gray-700 cursor-not-allowed'
-                }`}
+              className={`flex-1 min-h-0 flex items-center justify-center px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider border transition-all ${
+                debugMode
+                  ? controlEnabled
+                    ? 'bg-yellow-800/60 border-yellow-600 text-yellow-300 shadow-[0_0_6px_rgba(234,179,8,0.3)]'
+                    : 'bg-yellow-900/40 border-yellow-800 text-yellow-700 cursor-not-allowed'
+                  : controlEnabled
+                    ? 'bg-gray-800 border-gray-700 text-gray-500 hover:border-gray-500'
+                    : 'bg-gray-900 border-gray-800 text-gray-700 cursor-not-allowed'
+              }`}
               title={controlEnabled ? undefined : 'Viewer mode: controls locked'}
             >
               {debugMode ? '🔓 DEBUG' : '🔒 SAFE'}
@@ -316,10 +309,11 @@ export default function TopBar() {
                   setShowUnlockForm((v) => !v);
                 }
               }}
-              className={`justify-center w-full py-2 xl:py-4 rounded-xl text-[10px] xl:text-sm font-semibold uppercase tracking-wider border flex ${controlEnabled
-                ? 'border-green-500 bg-green-900/40 text-green-300 hover:bg-green-800/60'
-                : 'border-gray-700 bg-gray-900 text-gray-400 hover:bg-gray-800'
-                }`}
+              className={`flex-1 min-h-0 flex items-center justify-center px-2 py-1 rounded-md text-xs font-semibold uppercase tracking-wider border ${
+                controlEnabled
+                  ? 'border-green-500 bg-green-900/40 text-green-300 hover:bg-green-800/60'
+                  : 'border-gray-700 bg-gray-900 text-gray-400 hover:bg-gray-800'
+              }`}
             >
               {controlEnabled ? 'CONTROLLER' : 'VIEWER'}
             </button>

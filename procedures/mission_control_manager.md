@@ -24,14 +24,14 @@
 - [ ] **WAIT FOR ECOMM DRY RUN COMPLETION, ACTCOMM NOMINAL REPORT, AND AVIONICS MANAGER DRY RUN NOMINAL BEFORE PROCEEDING TO PRESS PROOF.**
 
 ## Press Proof
-- [ ] **TELL OPERATIONS MANAGER YOU ARE ARMING AND PRESSURIZING PER HOTFIRE ATTEMPT PROCEDURE.**
-- [ ] Command **Pressurize System**. Pressurize COPV tank first using medium pressure GSE which will be done manually. Pressurize both tanks. 
-- [ ] Monitor tank pressures continuouly during pressurization.
-- [ ] Once all personnel have cleared, continue with high pressure system after both tank presses have been closed.
+- [ ] **TELL OPERATIONS MANAGER YOU ARE ARMING AND PRESSURIZING.**
+- [ ] Command **Pressurize System**. Pressurize COPV tank first using medium pressure GSE which will be done manually. This will only be done to 600 psi. Pressurize both tanks to 600 psi. 
+- [ ] Monitor tank pressures continuously during pressurization.
 - [ ] Watch for overpressure, instability, or unexpected sensor behavior.
 - [ ] **BREAK HERE. WAIT FOR TANK PRESSURES TO STABILIZE (STABLE PRESSURE CHECK).**
 - [ ] Confirm stabilization flag and nominal pressure values.
-- [ ] **WAIT FOR GN2/HIGH PRESS FILL AND ECOMM TO CONFIRM NOMINAL PRESSURES BEFORE PROCEEDING TO FILL.**
+- [ ] **WAIT FOR GN2/HIGH PRESS FILL AND ECOMM TO CONFIRM NOMINAL PRESSURES.**
+- [ ] Once confirmed all systems are mostly leak proof and all solenouds and ball valves work well, vent the entire system.
 
 ## Fill
 - [ ] Command state transitions to support Fuel Fill and LOX Fill per master procedure (e.g., **Fuel Fill**, **Armed**, and cryogen fill-related states).

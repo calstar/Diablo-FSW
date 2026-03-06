@@ -19,17 +19,14 @@
 - [ ] Confirm Operations Manager acknowledges clear zone.
 - [ ] Command System to **Armed** state.
 - [ ] Verify state change confirmation in telemetry.
-- [ ] Perform State Conformity Check based on Avionics/ECOMM readouts.
 - [ ] Confirm tank pressures within expected pre-press range.
 - [ ] **TELL OPERATIONS MANAGER YOU ARE ARMING AND PRESSURIZING PER HOTFIRE ATTEMPT PROCEDURE.**
-- [ ] Command **Pressurize System**.
-- [ ] Monitor tank pressures continuously during pressurization.
+- [ ] Command **Pressurize System**. Pressurize COPV tank first using medium pressure GSE which will be done manually. Pressurize both tanks. 
+- [ ] Monitor tank pressures continuouly during pressurization.
+- [ ] Once all personnel have cleared, continue with high pressure system after both tank presses have been closed.
 - [ ] Watch for overpressure, instability, or unexpected sensor behavior.
 - [ ] **BREAK HERE. WAIT FOR TANK PRESSURES TO STABILIZE (STABLE PRESSURE CHECK).**
 - [ ] Confirm stabilization flag and nominal pressure values.
-- [ ] Command Quick-Disconnect (QD).
-- [ ] Perform Stable Pressure Check post-QD.
-- [ ] Confirm pressures remain within tolerance.
 - [ ] **TELL AVIONICS MANAGER TO PERFORM IGNITION VERBAL CHECK.**
 - [ ] Confirm igniter continuity and voltage verification.
 - [ ] **IGNITE.**

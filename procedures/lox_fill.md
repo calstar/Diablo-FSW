@@ -11,9 +11,9 @@
 - [ ] Confirm QD fully seated and locked.
 - [ ] Confirm GSE LOX fill vents are closed and main fill ball valve is open.
 - [ ] **TELL PAD MANAGER / MISSION CONTROL LOX FILL SYSTEM IS SECURE.**
-- [ ] **CLEAR AREA: Ensure non-essential personnel are out of LOS of the pad.**
+- [ ] **CLEAR AREA: Ensure non-essential personnel are away from the pad.**
 - [ ] Confirm relief path is clear and vent outlets are unobstructed.
-- [ ] **CONFIRM PREP SIGNAL WITH SAFETY OFFICER / CONTROL SYSTEM OFFICER (DAQ SENSE power energized, signal continuity/comms check).**
+- [ ] **CONFIRM PREP SIGNAL WITH SAFETY OFFICER / CONTROL SYSTEM OFFICER (DAQ power energized, signal continuity/comms check).**
 
 ## Dry Run & Testing
 - [ ] **WAIT FOR MISSION CONTROL MANAGER TO PROCEED TO PRESS PROOF.**
@@ -23,11 +23,11 @@
 
 ## Fill
 - [ ] **BREAK HERE. WAIT FOR OPERATIONS MANAGER TO GIVE THE GO TO BEGIN CRYOGEN FILL.**
+- [ ] Pre-chill all fittings on the line and ensure there is no water or anythin in the way. Ensure the lox line has been purged completely.
 - [ ] Verify starting valve alignments:
       - [ ] Fill line vent valve: **CLOSED**
       - [ ] Tank fill valve on GSE: **OPEN**
       - [ ] Tank vent valve: **OPEN**
-      - [ ] Emergency vent valve: **CLOSED**
 - [ ] Visually inspect valve positions and surrounding hardware.
 - [ ] Slowly open LOX Dewar liquid valve.
 - [ ] Monitor LOX system pressure gauges continuously.

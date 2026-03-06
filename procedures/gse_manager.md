@@ -5,34 +5,34 @@
 ## Preparation
 - [ ] Layout materials and wheel out Ground Support Equipment (GSE) system.
 - [ ] Position GSE in designated safe operating location.
-- [ ] Check relief valve pressures are set appropriately.
-- [ ] Verify regulator setpoints match expected output ranges.
-- [ ] Ensure check valves are installed in correct orientation.
 - [ ] Ensure regulators are installed in correct orientation (HP to HP, LP to LP).
 - [ ] Verify non-electrical valves are mounted per P&ID.
 - [ ] Inspect hose routing for kinks, abrasion, or stress points.
 - [ ] Check fluid fitting tightness throughout GSE system (do not overtighten).
-- [ ] Confirm NPT fittings have proper thread sealant application.
+- [ ] Check actuator mounts for alignment and slop.
+- [ ] Confirm NPT fittings have proper thread sealant application/taped properly.
 
 ## Setup & Coordination
 - [ ] **TELL ACTCOMM TO VERIFY PNEUMATIC ACTUATORS.**
 - [ ] **TELL ECOMM TO VERIFY SENSOR CONNECTIONS ON GSE.**
-- [ ] Confirm solenoid manifold plumbing matches P&ID.
+- [ ] Confirm solenoid manifold actuator mapping matches P&ID.
 - [ ] Confirm pneumatic supply lines are labeled and correctly routed.
-- [ ] **BREAK HERE. WAIT FOR ACTCOMM / ECOMM TO CONFIRM CONNECTIONS.**
-- [ ] Secure pressurized bottles (strapped and stable).
-- [ ] Attach fluid lines to hardware system and secure.
+- [ ] **BREAK HERE. WAIT FOR ACTCOMM/ECOMM TO CONFIRM CONNECTIONS.**
+- [ ] Ensure pressurized bottles are secure (strapped and stable).
+- [ ] Attach pressure and fill lines from K-bottle to pressure side GSEs (high side and low side).
+- [ ] Ensure that the fuel fill line is connected to the fuel fill GSE.
+- [ ] Ensure the lox fill line is connected to the dewar.
 - [ ] Confirm QDs are properly seated and locked.
 - [ ] Confirm vent lines are routed away from personnel and equipment.
 - [ ] Set System and GSE fluid valves to safe starting state.
-- [ ] **TELL PAD MANAGER GSE IS READY FOR PRESSURIZATION HAZARD CHECK / SAFETY OFFICER CHECKOFFS.**
+- [ ] **TELL PAD MANAGER GSE IS READY FOR PRESSURIZATION HAZARD CHECK/SAFETY OFFICER CHECKOFFS.**
 
 ## Pressurization Setup
-- [ ] Connect High Pressure K-bottle to GSE.
-- [ ] Set High Pressure regulator to 4500 psi.
+- [ ] Connect the high pressure K-bottle to GSE.
+- [ ] Set the high pressure regulator to 4000 psi.
 - [ ] Confirm pressure gauge reading matches regulator setpoint.
-- [ ] Connect Low Pressure K-bottle to GSE.
-- [ ] Set Low Pressure regulator to 150 psi.
+- [ ] Connect the low pressure K-bottle to GSE.
+- [ ] Set the low pressure regulator to 130 psi.
 - [ ] Confirm low pressure gauge reading matches regulator setpoint.
 - [ ] Check for leaks at all high and low pressure fittings.
 

@@ -9,6 +9,7 @@
 - [ ] Tighten all fill connections until significant resistance is met (inspect at resistance).
 - [ ] Connect GSE LOX fill QD to LOX tank.
 - [ ] Confirm QD fully seated and locked.
+- [ ] Confirm GSE LOX fill vents are closed and main fill ball valve is open.
 - [ ] **TELL PAD MANAGER / MISSION CONTROL LOX FILL SYSTEM IS SECURE.**
 - [ ] **CLEAR AREA: Ensure non-essential personnel are out of LOS of the pad.**
 - [ ] Confirm relief path is clear and vent outlets are unobstructed.
@@ -18,7 +19,7 @@
 - [ ] **BREAK HERE. WAIT FOR OPERATIONS MANAGER TO GIVE THE GO TO BEGIN CRYOGEN FILL.**
 - [ ] Verify starting valve alignments:
       - [ ] Fill line vent valve: **CLOSED**
-      - [ ] Tank fill valve on feed system: **OPEN**
+      - [ ] Tank fill valve on GSE: **OPEN**
       - [ ] Tank vent valve: **OPEN**
       - [ ] Emergency vent valve: **CLOSED**
 - [ ] Visually inspect valve positions and surrounding hardware.
@@ -36,8 +37,10 @@
             - [ ] Disconnect fill line from tank fill valve.
             - [ ] Drain tank through connected GSE dump valve.
             - [ ] Tighten fittings and re-attempt fill.
-- [ ] Monitor LOX dip tube:
-      - [ ] Use dip-tube venting as visual confirmation of fill level.
+- [ ] Fill lox tank until lox vents from tank vent valve. 
+- [ ] Close lox fill line main valve.
+- [ ] Instruct operator to end ox fill and return to armed.
+- [ ] Inspect that correct solenoids and valves close at the end of ox fill.
 - [ ] Maintain continuous comms with Pad Manager and Mission Control Manager.
 - [ ] Report pressure readings and visible venting status.
 - [ ] **BREAK HERE. WAIT FOR VIDCOMM / MISSION CONTROL TO CONFIRM LEVEL / VENTING.**

@@ -7,7 +7,7 @@
 - [ ] Inspect all non-electrical valves on engine for correct orientation and function.
 - [ ] Verify regulator orientation (HP to HP, LP to LP).
 - [ ] Verify check valves are installed in correct flow direction.
-- [ ] Inspect all Swagelok and NPT fittings for proper tightness (no overtightening).
+- [ ] Inspect all Swagelok, NPT, and JIC fittings for proper tightness (no overtightening).
 - [ ] Confirm proper thread sealant application on NPT fittings.
 - [ ] Verify all relief valves are installed, unobstructed, and venting safely.
 - [ ] Confirm no extraneous fittings or temporary hardware remain on engine.

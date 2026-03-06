@@ -31,12 +31,16 @@ function ReadoutBox({
   const display = value !== null ? formatWithCommas(value, decimals) : '---';
   if (compact) {
     return (
-      <div className="bg-white/[0.02] backdrop-blur-md border border-white/5 rounded-lg px-3 py-2 flex items-center gap-3 min-w-0 hover:bg-white/[0.04] hover:shadow-md transition-all duration-300 flex-1">
-        <span className="text-xs text-gray-400 font-bold uppercase tracking-widest truncate">{label}</span>
-        <span className="text-lg font-black font-mono tabular-nums ml-auto" style={{ color, textShadow: `0 0 8px ${color}50` }}>
+      <div className="bg-white/[0.02] backdrop-blur-md border border-white/5 rounded-lg px-2 py-1.5 flex items-center gap-2 min-w-0 hover:bg-white/[0.04] hover:shadow-md transition-all duration-300 flex-1">
+        {label ? (
+          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest truncate">{label}</span>
+        ) : null}
+        <span className="text-sm font-black font-mono tabular-nums ml-auto" style={{ color, textShadow: `0 0 6px ${color}40` }}>
           {display}
         </span>
-        <span className="text-xs text-gray-500 font-semibold uppercase tracking-wider">{unit}</span>
+        {unit ? (
+          <span className="text-[9px] text-gray-500 font-semibold uppercase tracking-wider">{unit}</span>
+        ) : null}
       </div>
     );
   }

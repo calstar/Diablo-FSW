@@ -156,16 +156,16 @@ export default function ActuatorControl({ actuatorId }: ActuatorControlProps) {
   const showMismatch = false;
 
   return (
-    <div className={`rounded-md p-1 border transition-colors h-full flex flex-col relative
+    <div className={`rounded-md p-0.5 border transition-colors h-full min-h-0 flex flex-col relative
       ${showMismatch && mismatch
         ? 'bg-yellow-950/40 border-yellow-600'
         : 'bg-background border-gray-700 hover:border-gray-600'}`}>
-      <div className="absolute top-1 right-1 flex items-center gap-1">
-        {pending && <span className="text-yellow-400 text-[9px] leading-none">⟳</span>}
-        <div className={`w-2.5 h-2.5 rounded-full ${commanded === null ? 'bg-gray-600' : commandedOpen ? 'bg-green-500' : 'bg-red-500'}`} />
+      <div className="absolute top-0.5 right-0.5 flex items-center gap-0.5">
+        {pending && <span className="text-yellow-400 text-[8px] leading-none">⟳</span>}
+        <div className={`w-2 h-2 rounded-full ${commanded === null ? 'bg-gray-600' : commandedOpen ? 'bg-green-500' : 'bg-red-500'}`} />
       </div>
-      <div className="flex-[5] flex items-center min-h-0 overflow-hidden pr-5">
-        <h3 className="font-bold tracking-wider text-text uppercase leading-tight truncate" style={{ fontSize: 'clamp(8px, 2vh, 22px)' }}>
+      <div className="flex-[4] flex items-center min-h-0 overflow-hidden pr-4">
+        <h3 className="font-bold tracking-wider text-text uppercase leading-tight truncate text-[11px]">
           {ACTUATOR_NAMES[actuatorId]}
         </h3>
         {showMismatch && mismatch && (

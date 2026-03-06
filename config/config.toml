@@ -114,7 +114,7 @@ listen_port = 5005         # Actuator board listens for ACTUATOR_COMMAND on this
 num_actuators = 10
 num_sensors = 10            # 10 current sense ADC channels
 board_id = 11              # Actuator Board #1 (label on board)
-enabled = true
+enabled = false
 enable_serial_printing = true
 necessary_for_abort = false
 # voltage_reference: 0 = Internal 2.5V, 1 = VDD (ratiometric), 2 = 5V absolute

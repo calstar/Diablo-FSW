@@ -84,9 +84,10 @@ interface ActuatorRowProps {
   entity: string;
   color: string;
   expected: ExpectedPosition;
+  compact?: boolean;
 }
 
-function ActuatorRow({ label, entity, color, expected }: ActuatorRowProps) {
+function ActuatorRow({ label, entity, color, expected, compact = false }: ActuatorRowProps) {
   // Try both named entity and channel fallback
   const status = useSensorValue(entity, 'status');
   const adcNamed = useSensorValue(entity, 'raw_adc_counts');
@@ -96,19 +97,50 @@ function ActuatorRow({ label, entity, color, expected }: ActuatorRowProps) {
   const channelNum = entityMatch ? parseInt(entityMatch[1], 10) : null;
 
   // Try channel-based lookup if we found a channel number
-  // Use a dummy entity that won't match anything if no channel
   const channelEntity = channelNum ? `ACT.ACT_CH${channelNum}` : 'ACT._DUMMY_NO_CH';
   const adcChannel = useSensorValue(channelEntity, 'raw_adc_counts');
 
-  // Prefer named entity, fallback to channel-based (only if channelNum exists)
   const adc = adcNamed ?? (channelNum ? adcChannel : null);
   const hasData = status !== null || adc !== null;
   const isOpen = status === 1 || (adc !== null && adc > 1000);
 
-  // Determine if actual state matches expected
   const mismatch = expected !== null && hasData && (
     (expected === 'open' && !isOpen) || (expected === 'closed' && isOpen)
   );
+  if (compact) {
+    return (
+      <div className={`flex items-center justify-between rounded px-2 py-1.5 ${
+        mismatch ? 'bg-yellow-950/40 border border-yellow-600/50' : 'bg-gray-900/50'
+      }`}>
+        <div className="flex items-center gap-2">
+          <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+          <span className="text-xs font-bold text-text-muted uppercase tracking-wider">{label}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {expected && (
+            <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+              expected === 'open' ? 'bg-green-900/30 text-green-600' : 'bg-red-900/30 text-red-600'
+            }`}>
+              EXP:{expected === 'open' ? 'O' : 'C'}
+            </span>
+          )}
+          <span className="text-xs font-mono text-gray-400 tabular-nums">
+            {hasData ? (adc?.toLocaleString() ?? '---') : '---'}
+          </span>
+          <span
+            className={`text-xs font-bold font-mono px-2 py-1 rounded ${
+              !hasData ? 'bg-gray-800 text-gray-600' :
+              isOpen   ? 'bg-green-900/60 text-green-400 border border-green-800' :
+                         'bg-red-900/60 text-red-400 border border-red-800'
+            }`}
+          >
+            {!hasData ? '---' : isOpen ? 'OPEN' : 'CLOSED'}
+          </span>
+          {mismatch && <span className="text-yellow-400 text-sm">⚠</span>}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className={`flex items-center justify-between rounded-lg px-5 py-4 ${
       mismatch ? 'bg-yellow-950/40 border border-yellow-600/50' : 'bg-gray-900/50'
@@ -118,7 +150,6 @@ function ActuatorRow({ label, entity, color, expected }: ActuatorRowProps) {
         <span className="text-base font-bold text-text-muted uppercase tracking-wider">{label}</span>
       </div>
       <div className="flex items-center gap-3">
-        {/* Expected position indicator */}
         {expected && (
           <span className={`text-xs font-mono px-2 py-1 rounded ${
             expected === 'open' ? 'bg-green-900/30 text-green-600' : 'bg-red-900/30 text-red-600'
@@ -147,22 +178,23 @@ function ActuatorRow({ label, entity, color, expected }: ActuatorRowProps) {
 interface ActuatorStatePanelProps {
   title: string;
   actuators: { label: string; entity: string; color: string }[];
+  compact?: boolean;
 }
 
-export default function ActuatorStatePanel({ title, actuators }: ActuatorStatePanelProps) {
+export default function ActuatorStatePanel({ title, actuators, compact = false }: ActuatorStatePanelProps) {
   const currentState = useSensorStore((s) => s.currentState);
 
-  // Get expected positions for current state
   const stateExpected = currentState != null ? (EXPECTED_POSITIONS[currentState] ?? {}) : {};
 
   return (
-    <div className="bg-card rounded-lg p-4 flex flex-col gap-3">
-      <h3 className="text-base font-bold text-text-muted uppercase tracking-widest mb-1">{title}</h3>
+    <div className={`bg-card rounded-lg flex flex-col ${compact ? 'p-2 gap-1.5' : 'p-4 gap-3'}`}>
+      <h3 className={`font-bold text-text-muted uppercase tracking-widest ${compact ? 'text-xs mb-0.5' : 'text-base mb-1'}`}>{title}</h3>
       {actuators.map((a) => (
         <ActuatorRow
           key={a.entity}
           {...a}
           expected={stateExpected[a.entity] ?? null}
+          compact={compact}
         />
       ))}
     </div>

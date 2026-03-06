@@ -102,18 +102,16 @@ export default function GSEGraphsPage() {
   const lowVal  = useSensorValue('PT_Cal.GSE_Low',  'pressure_psi');
   const highVal = useSensorValue('PT_Cal.GSE_High', 'pressure_psi');
 
-  const barValue = activeTab === 'pressurant' ? midVal : activeTab === 'fuel' ? lowVal : highVal;
-  const barLimits = activeTab === 'pressurant' ? pressurantLimits : activeTab === 'fuel' ? fuelLimits : loxLimits;
+  // All three GSE pressures for graph and readout (tab only switches actuators)
+  const gsePressureEntities = ['PT_Cal.GSE_Mid', 'PT_Cal.GSE_Low', 'PT_Cal.GSE_High'] as const;
+  const gsePressureLabels = ['GSE Mid', 'GSE Low', 'GSE High'];
 
-  const readoutSensors = tab.entities.map((entity, i) => {
-    const configSensor = gseSensors.find((s) => s.calEntity === entity);
-    return {
-      label: configSensor?.role ?? tab.entityLabels[i],
-      entity,
-      component: 'pressure_psi' as const,
-      color: getEntityColor(entity),
-    };
-  });
+  const readoutSensors = gsePressureEntities.map((entity, i) => ({
+    label: gsePressureLabels[i],
+    entity,
+    component: 'pressure_psi' as const,
+    color: getEntityColor(entity),
+  }));
 
   useEffect(() => {
     ws.connect();
@@ -123,20 +121,20 @@ export default function GSEGraphsPage() {
   }, [ws, updateSensor, updateState]);
 
   return (
-    <main className="h-full bg-background text-text flex flex-col overflow-hidden p-3 gap-2">
+    <main className="h-full bg-background text-text flex flex-col overflow-hidden p-2 gap-1">
 
       {/* Header + tab row */}
       <div className="flex items-center justify-between flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <div className={`w-1 h-5 rounded-full ${tab.accentClass}`} />
-          <h1 className="text-base font-bold tracking-wider" style={{ color: tab.color }}>GSE — {tab.label.toUpperCase()}</h1>
+        <div className="flex items-center gap-2">
+          <div className={`w-0.5 h-4 rounded-full ${tab.accentClass}`} />
+          <h1 className="text-sm font-bold tracking-wider" style={{ color: tab.color }}>GSE — {tab.label.toUpperCase()}</h1>
         </div>
-        <div className="flex gap-2 bg-gray-900 rounded-lg p-1">
+        <div className="flex gap-1 bg-gray-900 rounded-lg p-0.5">
           {(Object.keys(TAB_CONFIG) as GSETab[]).map((key) => (
             <button
               key={key}
               onClick={() => setActiveTab(key)}
-              className={`px-3 py-1.5 text-sm font-bold rounded-md transition-colors ${
+              className={`px-2 py-1 text-xs font-bold rounded transition-colors ${
                 activeTab === key
                   ? TAB_CONFIG[key].activeClass
                   : 'text-gray-400 hover:text-white hover:bg-gray-800'
@@ -148,51 +146,49 @@ export default function GSEGraphsPage() {
         </div>
       </div>
 
-      {/* Live readout strip for active tab sensors */}
+      {/* Live readout strip – compact */}
       <div className="flex-shrink-0">
-        <SensorReadoutStrip sensors={readoutSensors} />
+        <SensorReadoutStrip variant="compact" sensors={readoutSensors} />
       </div>
 
       {/* Body: chart + actuators + pressure bar */}
       <div className="flex-1 min-h-0 flex flex-row gap-2">
 
-        {/* Left: plot + actuators (plot dominant) */}
-        <div className="flex-1 flex flex-col gap-2 min-h-0 min-w-0">
-          <div className="flex-[3] min-h-0 bg-card rounded-lg p-2 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col gap-1.5 min-h-0 min-w-0">
+          <div className="flex-[5] min-h-0 bg-card rounded-lg p-2 flex flex-col min-w-0">
             <TimeSeriesPlot
-              key={activeTab}
-              title={tab.label}
-              entities={tab.entities}
-              labels={tab.entityLabels}
+              title="GSE Pressures"
+              entities={[...gsePressureEntities]}
+              labels={[...gsePressureLabels]}
               component="pressure_psi"
-              colors={tab.entities.map((e) => getEntityColor(e))}
-              yLabel={tab.yLabel}
+              colors={gsePressureEntities.map((e) => getEntityColor(e))}
+              yLabel="Pressure (PSI)"
             />
           </div>
 
-          <div className="flex-[1] min-h-[280px] flex-shrink-0 overflow-auto">
+          <div className="flex-shrink-0 min-h-[140px] overflow-auto">
             <ActuatorStatePanel
+              compact
               title={`${tab.label} Actuators`}
               actuators={tab.actuators.map((a) => ({ ...a, color: getActuatorColor(a.entity) }))}
             />
           </div>
         </div>
 
-        {/* Right: single pressure bar for active tab (narrower) */}
-        <div className="w-32 bg-card rounded-lg p-3 flex flex-col gap-2 flex-shrink-0 overflow-visible">
+        {/* Pressure bars: all three GSE Mid, Low, High */}
+        <div className="w-40 bg-card rounded-lg p-3 flex flex-col gap-2 flex-shrink-0 overflow-visible">
           <div className="text-xs font-bold uppercase tracking-widest text-gray-400 text-center flex-shrink-0">
-            Pressure
+            Pressures
           </div>
           <div className="flex flex-row flex-1 gap-2 min-h-0 overflow-visible w-full pr-6">
-            <div className="flex-1 min-h-0 min-w-0 overflow-visible">
-              <PressureBar
-                label={tab.barLabel}
-                value={barValue}
-                nop={barLimits.nop}
-                meop={barLimits.meop}
-                color={getEntityColor(tab.barEntity)}
-                showLabels={false}
-              />
+            <div className="flex-1 min-h-0 min-w-0 max-w-full overflow-visible">
+              <PressureBar label="Mid" value={midVal} nop={pressurantLimits.nop} meop={pressurantLimits.meop} color={getEntityColor('PT_Cal.GSE_Mid')} showLabels={false} />
+            </div>
+            <div className="flex-1 min-h-0 min-w-0 max-w-full overflow-visible">
+              <PressureBar label="Low" value={lowVal} nop={fuelLimits.nop} meop={fuelLimits.meop} color={getEntityColor('PT_Cal.GSE_Low')} showLabels={false} />
+            </div>
+            <div className="flex-1 min-h-0 min-w-0 max-w-full overflow-visible">
+              <PressureBar label="High" value={highVal} nop={loxLimits.nop} meop={loxLimits.meop} color={getEntityColor('PT_Cal.GSE_High')} showLabels={false} />
             </div>
           </div>
         </div>

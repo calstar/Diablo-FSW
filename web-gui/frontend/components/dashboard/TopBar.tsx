@@ -34,7 +34,7 @@ const SHORT_LABELS: Record<string, string> = {
 };
 
 // Separate component for each pressure bar to properly use hooks
-// Dynamic width: ~9% each with max so bars scale with viewport
+// Fixed min width in px so spacing is stable at 100% zoom; flex-1 shares remaining space evenly
 function ReactivePressureBar({ label, entity, nop, meop, color }: {
   label: string;
   entity: string;
@@ -45,8 +45,8 @@ function ReactivePressureBar({ label, entity, nop, meop, color }: {
   const value = useSensorValue(entity, 'pressure_psi');
   return (
     <div
-      className="min-w-0 h-full overflow-visible flex-1"
-      style={{ minWidth: '6%', maxWidth: '14%' }}
+      className="min-w-[42px] max-w-[72px] h-full overflow-hidden flex-1 flex flex-col items-stretch"
+      style={{ flex: '1 1 0' }}
     >
       <PressureBar
         label={label}
@@ -222,36 +222,34 @@ export default function TopBar() {
   return (
     <div
       className="bg-card border-b border-gray-800 select-none flex-shrink-0"
-      style={{ height: '18vh' }}
+      style={{ height: '14vh', minHeight: '100px' }}
     >
-      <div className="flex items-stretch h-full px-4 gap-2 py-2">
+      <div className="flex items-stretch h-full px-3 gap-2 py-1.5">
 
         {/* Left: brand + connection + clock + countdown */}
-        <div className="flex flex-col justify-start gap-1 flex-shrink-0 pr-6 border-r border-gray-800/60">
-          <span className="text-3xl font-bold tracking-widest text-blue-400 uppercase leading-none">
+        <div className="flex flex-col justify-start gap-0.5 flex-shrink-0 pr-4 border-r border-gray-800/60">
+          <span className="text-xl font-bold tracking-widest text-blue-400 uppercase leading-none">
             DIABLO DAQ
           </span>
-          <div className="flex items-center gap-2">
-            <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${isFullyConnected ? 'bg-green-500' : isConnected ? 'bg-yellow-500' : 'bg-red-500'}`} />
-            <span className="text-sm text-gray-300 font-semibold">
+          <div className="flex items-center gap-1.5">
+            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isFullyConnected ? 'bg-green-500' : isConnected ? 'bg-yellow-500' : 'bg-red-500'}`} />
+            <span className="text-xs text-gray-300 font-semibold">
               {isFullyConnected ? 'Connected' : isConnected ? 'WS Only' : 'Disconnected'}
             </span>
           </div>
-          <span className="text-xl font-mono text-gray-200 tabular-nums font-bold leading-tight">{clock}</span>
-          <div className="flex items-center gap-2">
-            <span className={`text-xl font-mono tabular-nums font-bold leading-tight ${countdownExpired ? 'text-red-400' : 'text-white'}`}>
-              {countdown}
-            </span>
-          </div>
+          <span className="text-base font-mono text-gray-200 tabular-nums font-bold leading-tight">{clock}</span>
+          <span className={`text-base font-mono tabular-nums font-bold leading-tight ${countdownExpired ? 'text-red-400' : 'text-white'}`}>
+            {countdown}
+          </span>
         </div>
 
         {/* Middle: notifications */}
-        <div className="flex flex-col justify-center pr-1 flex-shrink-0 w-[15vw]">
+        <div className="flex flex-col justify-center pr-1 flex-shrink-0 w-[12vw] min-w-[120px]">
           <NotificationPanel />
         </div>
 
-        {/* Center: pressure bars — dynamic spacing, scales with viewport */}
-        <div className="flex-[2] flex items-stretch justify-end gap-4 sm:gap-6 lg:gap-8 min-w-0 overflow-visible" style={{ maxWidth: '60vw' }}>
+        {/* Center: pressure bars — even distribution, stable at 100% zoom */}
+        <div className="flex-[2] flex items-stretch justify-center gap-1 min-w-0 overflow-hidden flex-nowrap">
           {effectivePressureBars.map(({ label, entity, nop, meop, color }) => (
             <ReactivePressureBar
               key={entity}

@@ -24,20 +24,20 @@ function WindowButton({ id, name, description, url, accent }: WindowButtonProps)
         }
       }}
       className={`
-        relative overflow-hidden bg-white/[0.02] backdrop-blur-md rounded-xl border transition-all duration-300 text-left group
-        hover:bg-white/[0.06] hover:shadow-xl hover:-translate-y-0.5
+        relative overflow-hidden bg-white/[0.02] backdrop-blur-md rounded-lg border transition-all duration-300 text-left group
+        hover:bg-white/[0.06] hover:shadow-lg
         ${isOpen ? 'border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.15)] ring-1 ring-inset ring-emerald-500/20' : 'border-white/5'}
       `}
     >
-      <div className="absolute left-0 top-0 bottom-0 w-1.5 rounded-l-lg" style={{ backgroundColor: accent }} />
-      <div className="px-4 py-3 pl-5">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-sm font-bold tracking-wide text-gray-200 group-hover:text-white transition-colors">{name}</span>
+      <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-md" style={{ backgroundColor: accent }} />
+      <div className="px-2 py-2 pl-3">
+        <div className="flex items-center justify-between gap-1">
+          <span className="text-xs font-bold tracking-wide text-gray-200 group-hover:text-white transition-colors">{name}</span>
           {isOpen && (
-            <span className="text-xs font-black font-mono text-emerald-400 flex-shrink-0 drop-shadow-[0_0_5px_rgba(16,185,129,0.5)]">● OPEN</span>
+            <span className="text-[10px] font-black font-mono text-emerald-400 flex-shrink-0 drop-shadow-[0_0_5px_rgba(16,185,129,0.5)]">● OPEN</span>
           )}
         </div>
-        <div className="text-[11px] font-semibold text-gray-400 mt-1 leading-relaxed line-clamp-2 group-hover:text-gray-300 transition-colors">{description}</div>
+        <div className="text-[10px] font-semibold text-gray-400 mt-0.5 leading-snug line-clamp-2 group-hover:text-gray-300 transition-colors">{description}</div>
       </div>
     </button>
   );
@@ -70,19 +70,19 @@ export default function WindowLauncher() {
   ];
 
   return (
-    <div className="bg-card rounded-lg border border-gray-800 p-4">
+    <div className="bg-card rounded-lg border border-gray-800 p-2">
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-3">
-          <h2 className="text-sm font-bold tracking-wider text-text-muted uppercase">View Windows</h2>
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="flex items-center gap-2">
+          <h2 className="text-xs font-bold tracking-wider text-text-muted uppercase">View Windows</h2>
           {openCount > 0 && (
-            <span className="text-xs text-text-muted">{openCount} window{openCount !== 1 ? 's' : ''} open</span>
+            <span className="text-[10px] text-text-muted">{openCount} window{openCount !== 1 ? 's' : ''} open</span>
           )}
         </div>
         {openCount > 0 && (
           <button
             onClick={closeAllWindows}
-            className="px-3 py-1.5 bg-red-900/40 border border-red-800 rounded text-xs font-semibold text-red-300 hover:bg-red-800/60 transition-colors"
+            className="px-2 py-1 bg-red-900/40 border border-red-800 rounded text-[10px] font-semibold text-red-300 hover:bg-red-800/60 transition-colors"
           >
             Close All
           </button>
@@ -90,12 +90,12 @@ export default function WindowLauncher() {
       </div>
 
       {/* Featured windows */}
-      <div className="mb-2 space-y-2">
+      <div className="mb-1.5">
         <WindowButton {...unifiedEntry} />
       </div>
 
-      {/* Grid - 2 rows */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+      {/* Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-1.5">
         {multiEntries.map((e) => (
           <WindowButton key={e.id} {...e} />
         ))}

@@ -661,6 +661,7 @@ class SensorSystemServer {
 
       for (const [key, raw] of Object.entries(boards)) {
         const board: any = raw;
+        if (board.enabled === false) continue; // Only track enabled boards on heartbeat page
         const type: string = board.type || 'UNKNOWN';
         // Distinguish between human board number and numeric ID used for IP
         const boardNumber: number | null = typeof board.board_number === 'number'

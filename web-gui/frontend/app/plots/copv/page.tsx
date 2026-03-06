@@ -39,25 +39,26 @@ export default function COPVGraphsPage() {
   }, [ws, updateSensor, updateState]);
 
   return (
-    <main className="h-full bg-background text-text flex flex-col overflow-hidden p-3 gap-2">
+    <main className="h-full bg-background text-text flex flex-col overflow-hidden p-2 gap-1">
 
-      <div className="flex items-center flex-shrink-0">
-        <div className="w-1 h-5 bg-green-500 rounded-full mr-3" />
-        <h1 className="text-base font-bold text-green-400 tracking-wider">COPV / GN2 SYSTEM</h1>
+      <div className="flex items-center flex-shrink-0 gap-2">
+        <div className="w-0.5 h-4 bg-green-500 rounded-full" />
+        <h1 className="text-sm font-bold text-green-400 tracking-wider">COPV / GN2 SYSTEM</h1>
       </div>
 
       <div className="flex-shrink-0">
-        <SensorReadoutStrip sensors={gn2Sensors.map((s) => ({
-          label: s.role, entity: s.calEntity, component: 'pressure_psi', color: getEntityColor(s.calEntity),
-        }))} />
+        <SensorReadoutStrip
+          variant="compact"
+          sensors={gn2Sensors.map((s) => ({
+            label: s.role, entity: s.calEntity, component: 'pressure_psi', color: getEntityColor(s.calEntity),
+          }))}
+        />
       </div>
 
       {/* Body: chart + sidebar */}
       <div className="flex-1 min-h-0 flex flex-row gap-2">
-        {/* Main charts + actuators */}
-        <div className="flex-1 flex flex-col gap-2 min-h-0 min-w-0">
-          {/* GN2 pressure */}
-          <div className="flex-[3] min-h-0 bg-card rounded-lg p-2 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col gap-1.5 min-h-0 min-w-0">
+          <div className="flex-[5] min-h-0 bg-card rounded-lg p-2 flex flex-col min-w-0">
             <TimeSeriesPlot
               title="COPV / GN2 Pressure (PSI)"
               entities={entities}
@@ -68,8 +69,9 @@ export default function COPVGraphsPage() {
             />
           </div>
 
-          <div className="flex-[1] min-h-[180px] flex-shrink-0 overflow-auto">
+          <div className="flex-shrink-0 min-h-[72px] overflow-auto">
             <ActuatorStatePanel
+              compact
               title="GN2 Actuator"
               actuators={[
                 { label: 'GN2 Vent', entity: 'ACT.GN2_Vent', color: getActuatorColor('ACT.GN2_Vent') },
@@ -78,7 +80,7 @@ export default function COPVGraphsPage() {
           </div>
         </div>
 
-        {/* Pressure bars sidebar (narrower) */}
+        {/* Pressure bars sidebar – unchanged */}
         <div className="w-40 bg-card rounded-lg p-3 flex flex-col gap-2 flex-shrink-0 overflow-visible">
           <div className="text-xs font-bold uppercase tracking-widest text-gray-400 text-center flex-shrink-0">
             Pressures

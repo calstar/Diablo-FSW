@@ -51,28 +51,30 @@ export default function FuelGraphsPage() {
   }, [ws, updateSensor, updateState]);
 
   return (
-    <main className="h-full bg-background text-text flex flex-col overflow-hidden p-3 gap-2">
+    <main className="h-full bg-background text-text flex flex-col overflow-hidden p-2 gap-1">
 
       {/* Header */}
       <div className="flex items-center justify-between flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-1 h-5 bg-blue-500 rounded-full" />
-          <h1 className="text-base font-bold text-blue-400 tracking-wider">FUEL SYSTEM</h1>
+        <div className="flex items-center gap-2">
+          <div className="w-0.5 h-4 bg-blue-500 rounded-full" />
+          <h1 className="text-sm font-bold text-blue-400 tracking-wider">FUEL SYSTEM</h1>
         </div>
       </div>
 
-      {/* Live readout strip */}
+      {/* Live readout strip – compact */}
       <div className="flex-shrink-0">
-        <SensorReadoutStrip sensors={fuelSensors.map((s) => ({
-          label: s.role, entity: s.calEntity, component: 'pressure_psi', color: getEntityColor(s.calEntity),
-        }))} />
+        <SensorReadoutStrip
+          variant="compact"
+          sensors={fuelSensors.map((s) => ({
+            label: s.role, entity: s.calEntity, component: 'pressure_psi', color: getEntityColor(s.calEntity),
+          }))}
+        />
       </div>
 
-      {/* Body: chart + sidebar */}
+      {/* Body: chart + sidebar (chart gets more space) */}
       <div className="flex-1 min-h-0 flex flex-row gap-2">
-        {/* Main chart + actuators (plot dominant, actuators reserved) */}
-        <div className="flex-1 flex flex-col gap-2 min-h-0 min-w-0">
-          <div className="flex-[3] min-h-0 bg-card rounded-lg p-2 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col gap-1.5 min-h-0 min-w-0">
+          <div className="flex-[5] min-h-0 bg-card rounded-lg p-2 flex flex-col min-w-0">
             <TimeSeriesPlot
               title="FUEL Pressure (PSI)"
               entities={entities}
@@ -83,9 +85,9 @@ export default function FuelGraphsPage() {
             />
           </div>
 
-          {/* Actuators – reserved height so always visible */}
-          <div className="flex-[1] min-h-[220px] flex-shrink-0 overflow-auto">
+          <div className="flex-shrink-0 min-h-[100px] overflow-auto">
             <ActuatorStatePanel
+              compact
               title="Fuel Actuators"
               actuators={[
                 { label: 'Fuel Main', entity: 'ACT.Fuel_Main', color: getActuatorColor('ACT.Fuel_Main') },
@@ -96,7 +98,7 @@ export default function FuelGraphsPage() {
           </div>
         </div>
 
-        {/* Pressure bars sidebar – narrower */}
+        {/* Pressure bars sidebar – unchanged */}
         <div className="w-40 bg-card rounded-lg p-3 flex flex-col gap-2 flex-shrink-0 overflow-visible">
           <div className="text-xs font-bold uppercase tracking-widest text-gray-400 text-center flex-shrink-0">
             Pressures

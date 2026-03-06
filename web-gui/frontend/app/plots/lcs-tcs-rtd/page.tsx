@@ -60,7 +60,24 @@ function buildTcChannelsWithRef(boards: Record<string, any>): { entity: string; 
   return out;
 }
 
-// ── Readout boxes ─────────────────────────────────────────────────────────────
+/** Build TC entity list with each board's voltage_reference (0=internal, 1=VDD, 2=5V). Uses first TC board's ref when multiple. */
+function buildTcChannelsWithRef(boards: Record<string, any>): { entity: string; label: string; voltageReference: number }[] {
+  const out: { entity: string; label: string; voltageReference: number }[] = [];
+  for (const board of Object.values(boards)) {
+    if (board.type !== 'TC' || board.enabled === false) continue;
+    const ref = Math.min(2, Math.max(0, (board.voltage_reference as number) ?? 0));
+    const active: number[] =
+      Array.isArray(board.active_connectors) && board.active_connectors.length > 0
+        ? (board.active_connectors as number[])
+        : Array.from({ length: (board.num_sensors as number) ?? 10 }, (_, i) => i + 1);
+    for (const ch of active) {
+      out.push({ entity: `TC.CH${ch}`, label: `TC Ch${ch}`, voltageReference: ref });
+    }
+  }
+  return out;
+}
+
+// ── Readout boxes (compact, uniform with other plot pages) ───────────────────────
 
 function DerivedReadoutBox({
   label, value, unit, color, decimals = 1,
@@ -68,14 +85,14 @@ function DerivedReadoutBox({
   label: string; value: number | null; unit: string; color: string; decimals?: number;
 }) {
   return (
-    <div className="bg-gray-900/60 rounded-xl px-4 py-3 flex flex-col gap-0.5 min-w-0 border border-gray-800/80">
-      <span className="text-xl font-bold text-gray-200 uppercase tracking-wider truncate">
+    <div className="bg-gray-900/60 rounded-lg px-2 py-1.5 flex flex-col gap-0 min-w-0 border border-gray-800/80 h-[52px] flex-shrink-0">
+      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider truncate flex-shrink-0">
         {label}
       </span>
-      <span className="text-4xl font-bold font-mono tabular-nums leading-tight" style={{ color }}>
+      <span className="text-sm font-bold font-mono tabular-nums leading-tight min-h-[1.25rem] flex items-center" style={{ color }}>
         {value !== null && Number.isFinite(value) ? value.toFixed(decimals) : '—'}
       </span>
-      <span className="text-xs text-gray-500 font-medium">{unit}</span>
+      <span className="text-[9px] text-gray-500 font-medium flex-shrink-0">{unit}</span>
     </div>
   );
 }
@@ -112,7 +129,7 @@ function SectionPlot({
 }) {
   return (
     <div className="flex flex-col flex-1 min-h-0 rounded-lg overflow-hidden bg-gray-950/50 border border-gray-800">
-      <div className="px-3 py-2 border-b border-gray-800 text-xs font-medium text-gray-500 flex-shrink-0">
+      <div className="px-2 py-1 border-b border-gray-800 text-[10px] font-medium text-gray-500 flex-shrink-0">
         {title}
       </div>
       <div className="flex-1 min-h-0 flex flex-col">
@@ -257,17 +274,17 @@ export default function LCS_TCS_RTDPage() {
 
   return (
     <main className="h-full min-h-0 bg-background text-text flex flex-col overflow-hidden">
-      <div className="flex-1 min-h-0 p-4 grid grid-cols-1 lg:grid-cols-3 gap-4 overflow-hidden min-w-0 lg:grid-rows-[1fr]">
+      <div className="flex-1 min-h-0 p-2 grid grid-cols-1 lg:grid-cols-3 gap-2 overflow-hidden min-w-0 lg:grid-rows-[1fr]">
 
         {/* ── TC (left column) ──────────────────────────────────────────────── */}
-        <section className="flex flex-col gap-3 min-w-0 h-full">
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <div className="w-1.5 h-10 rounded-full bg-amber-500/90" />
-            <h2 className="text-3xl font-bold tracking-widest text-gray-400 uppercase">
+        <section className="flex flex-col gap-1.5 min-w-0 h-full">
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <div className="w-0.5 h-4 rounded-full bg-amber-500/90" />
+            <h2 className="text-sm font-bold tracking-widest text-gray-400 uppercase">
               Thermocouples (K-type)
             </h2>
           </div>
-          <div className="bg-card rounded-xl border border-gray-800 p-4 flex flex-col gap-4 flex-1 min-h-0">
+          <div className="bg-card rounded-lg border border-gray-800 p-2 flex flex-col gap-1.5 flex-1 min-h-0">
             {tcEntities.length > 0 ? (
               <>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-shrink-0">
@@ -285,10 +302,10 @@ export default function LCS_TCS_RTDPage() {
                   <SensorReadoutStrip
                     variant="compact"
                     sensors={tcEntities.map((entity, i) => ({
-                      label: `${tcLabels[i]} ADC`,
+                      label: '',
                       entity,
                       component: 'raw_adc_counts',
-                      unit: 'counts',
+                      unit: '',
                       color: SENSE_COLORS[i % SENSE_COLORS.length],
                       decimals: 0,
                     }))}
@@ -305,7 +322,7 @@ export default function LCS_TCS_RTDPage() {
                 />
               </>
             ) : (
-              <p className="text-sm text-gray-500 text-center py-4">
+              <p className="text-xs text-gray-500 text-center py-2">
                 No TC boards enabled in config.toml
               </p>
             )}
@@ -313,17 +330,17 @@ export default function LCS_TCS_RTDPage() {
         </section>
 
         {/* ── RTD (middle column) ────────────────────────────────────────────── */}
-        <section className="flex flex-col gap-3 min-w-0 h-full">
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <div className="w-1.5 h-10 rounded-full bg-emerald-500/90" />
-            <h2 className="text-3xl font-bold tracking-widest text-gray-400 uppercase">
-              RTDs (Pt1000)
+        <section className="flex flex-col gap-1.5 min-w-0 h-full">
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <div className="w-0.5 h-4 rounded-full bg-emerald-500/90" />
+            <h2 className="text-sm font-bold tracking-widest text-gray-400 uppercase">
+              RTDs (Pt100)
             </h2>
           </div>
-          <div className="bg-card rounded-xl border border-gray-800 p-4 flex flex-col gap-4 flex-1 min-h-0">
+          <div className="bg-card rounded-lg border border-gray-800 p-2 flex flex-col gap-1.5 flex-1 min-h-0">
             {rtdEntities.length > 0 ? (
               <>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-shrink-0">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 flex-shrink-0">
                   {rtdCalEntities.map((entity, i) => (
                     <RTDTempReadout
                       key={entity}
@@ -337,10 +354,10 @@ export default function LCS_TCS_RTDPage() {
                   <SensorReadoutStrip
                     variant="compact"
                     sensors={rtdEntities.map((entity, i) => ({
-                      label: `${rtdLabels[i]} ADC`,
+                      label: '',
                       entity,
                       component: 'raw_resistance_counts',
-                      unit: 'counts',
+                      unit: '',
                       color: SENSE_COLORS[i % SENSE_COLORS.length],
                       decimals: 0,
                     }))}
@@ -357,7 +374,7 @@ export default function LCS_TCS_RTDPage() {
                 />
               </>
             ) : (
-              <p className="text-sm text-gray-500 text-center py-4">
+              <p className="text-xs text-gray-500 text-center py-2">
                 No RTD boards enabled in config.toml
               </p>
             )}
@@ -365,17 +382,17 @@ export default function LCS_TCS_RTDPage() {
         </section>
 
         {/* ── LC (right column) ─────────────────────────────────────────────── */}
-        <section className="flex flex-col gap-3 min-w-0 h-full">
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <div className="w-1.5 h-10 rounded-full bg-violet-500/90" />
-            <h2 className="text-3xl font-bold tracking-widest text-gray-400 uppercase">
+        <section className="flex flex-col gap-1.5 min-w-0 h-full">
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <div className="w-0.5 h-4 rounded-full bg-violet-500/90" />
+            <h2 className="text-sm font-bold tracking-widest text-gray-400 uppercase">
               Load cells (LCS)
             </h2>
           </div>
-          <div className="bg-card rounded-xl border border-gray-800 p-4 flex flex-col gap-4 flex-1 min-h-0">
+          <div className="bg-card rounded-lg border border-gray-800 p-2 flex flex-col gap-1.5 flex-1 min-h-0">
             {lcEntities.length > 0 ? (
               <>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 flex-shrink-0">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 flex-shrink-0">
                   {lcEntities.map((entity, i) => (
                     <LCForceReadout
                       key={entity}
@@ -385,14 +402,14 @@ export default function LCS_TCS_RTDPage() {
                     />
                   ))}
                 </div>
-                <div className="flex flex-wrap gap-2 flex-shrink-0">
+                <div className="flex-shrink-0">
                   <SensorReadoutStrip
                     variant="compact"
                     sensors={lcEntities.map((entity, i) => ({
-                      label: `${lcLabels[i]} ADC`,
+                      label: '',
                       entity,
                       component: 'raw_adc_counts',
-                      unit: 'counts',
+                      unit: '',
                       color: SENSE_COLORS[i % SENSE_COLORS.length],
                       decimals: 0,
                     }))}
@@ -409,7 +426,7 @@ export default function LCS_TCS_RTDPage() {
                 />
               </>
             ) : (
-              <p className="text-sm text-gray-500 text-center py-4">
+              <p className="text-xs text-gray-500 text-center py-2">
                 No LC boards enabled in config.toml
               </p>
             )}

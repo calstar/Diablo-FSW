@@ -90,18 +90,19 @@ export default function PressureBar({
   }, [displayValue, value, nop, meop, color]);
 
   return (
-    <div className="flex flex-col items-center h-full gap-1 min-h-0 overflow-visible select-none w-full">
-      {/* Label */}
+    <div className={`flex flex-col items-center h-full min-h-0 overflow-hidden select-none w-full ${compact ? 'gap-0.5' : 'gap-1'}`}>
+      {/* Title — white, uppercase, centered (matches reference) */}
       <div
-        className={`${compact ? 'leading-none' : 'text-2xl'} font-bold uppercase tracking-wider text-gray-300 text-center flex-shrink-0 whitespace-nowrap`}
-        style={compact ? { fontSize: 'clamp(10px, 1.4vw, 22px)' } : undefined}
+        className={`font-bold uppercase tracking-wider text-center flex-shrink-0 whitespace-nowrap text-white ${
+          compact ? 'text-[11px] leading-none' : 'text-xs'
+        }`}
       >
         {label}
       </div>
 
-      {/* Bar — takes all remaining space */}
+      {/* Bar — rounded dark card with thresholds and fill */}
       <div
-        className="relative w-full flex-1 rounded-xl border border-white/10 overflow-hidden min-h-0 bg-black/40 shadow-inner"
+        className="relative w-full flex-1 rounded-lg border border-white/10 overflow-hidden min-h-0 bg-black/40 shadow-inner"
         style={{ maxHeight: '100%' }}
       >
         {sane && value !== null && (
@@ -118,34 +119,27 @@ export default function PressureBar({
           />
         )}
 
-        {/* MEOP threshold line with centered value label */}
+        {/* MEOP threshold (red) — value above dashed line */}
         <div
           className="absolute w-full pointer-events-none flex flex-col items-center"
           style={{ bottom: `${meopPct.toFixed(2)}%` }}
         >
-          <span
-            className={`${compact ? 'text-[8px]' : 'text-sm'} font-mono font-extrabold text-red-400 whitespace-nowrap mb-0.5`}
-            style={compact ? { fontSize: 'clamp(8px, 0.7vw, 12px)' } : undefined}
-          >
+          <span className={`font-mono font-extrabold text-red-400 whitespace-nowrap mb-0.5 ${compact ? 'text-[8px]' : 'text-sm'}`}>
             {meop}
           </span>
           <div className="w-full border-t-2 border-dashed border-red-500/85" />
         </div>
 
-        {/* NOP threshold line with centered value label */}
+        {/* NOP threshold (yellow) — value above dashed line */}
         <div
           className="absolute w-full pointer-events-none flex flex-col items-center"
           style={{ bottom: `${nopPct.toFixed(2)}%` }}
         >
-          <span
-            className={`${compact ? 'text-[8px]' : 'text-sm'} font-mono font-extrabold text-yellow-400 whitespace-nowrap mb-0.5`}
-            style={compact ? { fontSize: 'clamp(8px, 0.7vw, 12px)' } : undefined}
-          >
+          <span className={`font-mono font-extrabold text-yellow-400 whitespace-nowrap mb-0.5 ${compact ? 'text-[8px]' : 'text-sm'}`}>
             {nop}
           </span>
           <div className="w-full border-t-2 border-dashed border-yellow-500/85" />
         </div>
-        {/* Fill top edge */}
         {sane && value !== null && displayHeight > 0.5 && (
           <div
             className="absolute w-full pointer-events-none"
@@ -158,13 +152,14 @@ export default function PressureBar({
         )}
       </div>
 
-      <div className="flex-shrink-0 text-center leading-none mt-1">
-        <div
-          className={`${compact ? 'leading-none' : 'text-2xl'} font-bold font-mono tabular-nums`}
-          style={compact ? { color: barColor, fontSize: 'clamp(14px, 1.8vw, 28px)' } : { color: barColor }}
+      {/* Current reading — color matches bar */}
+      <div className="flex-shrink-0 text-center leading-none">
+        <span
+          className={`font-bold font-mono tabular-nums ${compact ? 'text-xs' : 'text-sm'}`}
+          style={{ color: barColor }}
         >
           {value !== null ? fmtPressure(value) : '---'}
-        </div>
+        </span>
       </div>
     </div>
   );

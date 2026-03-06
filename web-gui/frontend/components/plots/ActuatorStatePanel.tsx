@@ -109,14 +109,16 @@ function ActuatorRow({ label, entity, color, expected, compact = false }: Actuat
   );
   if (compact) {
     return (
-      <div className={`flex items-center justify-between rounded px-2 py-1.5 ${
+      <div className={`flex items-center justify-between gap-2 rounded px-2 py-1.5 min-w-0 ${
         mismatch ? 'bg-yellow-950/40 border border-yellow-600/50' : 'bg-gray-900/50'
       }`}>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
           <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-          <span className="text-xs font-bold text-text-muted uppercase tracking-wider">{label}</span>
+          <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider truncate" title={label}>
+            {label}
+          </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 flex-shrink-0">
           {expected && (
             <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
               expected === 'open' ? 'bg-green-900/30 text-green-600' : 'bg-red-900/30 text-red-600'
@@ -124,11 +126,11 @@ function ActuatorRow({ label, entity, color, expected, compact = false }: Actuat
               EXP:{expected === 'open' ? 'O' : 'C'}
             </span>
           )}
-          <span className="text-xs font-mono text-gray-400 tabular-nums">
+          <span className="text-[10px] font-mono text-gray-400 tabular-nums">
             {hasData ? (adc?.toLocaleString() ?? '---') : '---'}
           </span>
           <span
-            className={`text-xs font-bold font-mono px-2 py-1 rounded ${
+            className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded ${
               !hasData ? 'bg-gray-800 text-gray-600' :
               isOpen   ? 'bg-green-900/60 text-green-400 border border-green-800' :
                          'bg-red-900/60 text-red-400 border border-red-800'
@@ -136,20 +138,22 @@ function ActuatorRow({ label, entity, color, expected, compact = false }: Actuat
           >
             {!hasData ? '---' : isOpen ? 'OPEN' : 'CLOSED'}
           </span>
-          {mismatch && <span className="text-yellow-400 text-sm">⚠</span>}
+          {mismatch && <span className="text-yellow-400 text-xs">⚠</span>}
         </div>
       </div>
     );
   }
   return (
-    <div className={`flex items-center justify-between rounded-lg px-5 py-4 ${
+    <div className={`flex items-center justify-between gap-3 rounded-lg px-5 py-4 min-w-0 ${
       mismatch ? 'bg-yellow-950/40 border border-yellow-600/50' : 'bg-gray-900/50'
     }`}>
-      <div className="flex items-center gap-3">
-        <div className="w-4 h-4 rounded-full" style={{ backgroundColor: color }} />
-        <span className="text-base font-bold text-text-muted uppercase tracking-wider">{label}</span>
+      <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
+        <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+        <span className="text-base font-bold text-text-muted uppercase tracking-wider truncate" title={label}>
+          {label}
+        </span>
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-shrink-0">
         {expected && (
           <span className={`text-xs font-mono px-2 py-1 rounded ${
             expected === 'open' ? 'bg-green-900/30 text-green-600' : 'bg-red-900/30 text-red-600'
@@ -187,8 +191,8 @@ export default function ActuatorStatePanel({ title, actuators, compact = false }
   const stateExpected = currentState != null ? (EXPECTED_POSITIONS[currentState] ?? {}) : {};
 
   return (
-    <div className={`bg-card rounded-lg flex flex-col ${compact ? 'p-2 gap-1.5' : 'p-4 gap-3'}`}>
-      <h3 className={`font-bold text-text-muted uppercase tracking-widest ${compact ? 'text-xs mb-0.5' : 'text-base mb-1'}`}>{title}</h3>
+    <div className={`bg-card rounded-lg flex flex-col min-w-0 overflow-hidden ${compact ? 'p-2 gap-1.5' : 'p-4 gap-3'}`}>
+      <h3 className={`font-bold text-text-muted uppercase tracking-widest truncate ${compact ? 'text-xs mb-0.5' : 'text-base mb-1'}`}>{title}</h3>
       {actuators.map((a) => (
         <ActuatorRow
           key={a.entity}

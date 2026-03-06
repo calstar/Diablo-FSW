@@ -20,6 +20,7 @@ const TYPE_ACCENT: Record<string, string> = {
   RTD: 'border-l-amber-500/70 bg-amber-950/10',
   ACTUATOR: 'border-l-rose-500/70 bg-rose-950/10',
 };
+const CARD_ACCENTS = Object.values(TYPE_ACCENT);
 
 function BoardCard({ b, accent }: { b: BoardStatus; accent: string }) {
   const unexpected = !b.expected;
@@ -115,7 +116,7 @@ export default function BoardsPage() {
   const boardsMap = useSensorStore((s) => s.boards as Record<number, BoardStatus>);
   const ws = getWebSocketClient();
 
-  const { byType, unexpected } = useMemo(() => {
+  const { byType, unexpected, boards } = useMemo(() => {
     const map = boardsMap ?? {};
     const list = Object.values(map);
     const expected = list.filter((b) => b.expected);
@@ -137,7 +138,8 @@ export default function BoardsPage() {
         return a.id - b.id;
       });
     }
-    return { byType, unexpected: unexpectedList };
+    const boards = [...expected, ...unexpectedList].sort((a, b) => a.id - b.id);
+    return { byType, unexpected: unexpectedList, boards };
   }, [boardsMap]);
 
   useEffect(() => {
@@ -293,7 +295,8 @@ export default function BoardsPage() {
                     ID {b.id} · {b.ip}
                   </div>
                 </div>
-              ))}
+              );
+            })}
           </div>
         )}
       </div>

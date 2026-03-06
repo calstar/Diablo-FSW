@@ -262,17 +262,17 @@ export default function TopBar() {
           ))}
         </div>
 
-        {/* Right: state + mode + abort — top-right aligned, natural width, pushed to edge */}
-        <div className="w-[25vw] flex items-stretch justify-between gap-2 flex-shrink-0 pl-3 border-l border-gray-800/60 ml-auto">
-          <div className="flex flex-col justify-center items-center gap-2 flex-1 min-w-0">
-            <span className="text-[10px] xl:text-sm text-gray-400 uppercase tracking-widest font-bold text-center">STATE</span>
-            <span className={`text-lg xl:text-2xl font-bold font-mono tracking-wider text-center leading-tight whitespace-normal ${stateColor}`}>
+        {/* Right: state + mode + abort — stretch to fill top bar height */}
+        <div className="flex items-stretch h-full gap-3 flex-shrink-0 pl-2 border-l border-gray-800/60 ml-auto">
+          <div className="flex flex-col items-center justify-center gap-0.5 w-32 flex-shrink-0">
+            <span className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">STATE</span>
+            <span className={`text-lg font-bold font-mono tracking-wider text-center leading-tight whitespace-normal ${stateColor}`}>
               {currentStateName}
             </span>
           </div>
 
-          {/* Control lock + debug mode stacked */}
-          <div className="flex flex-col items-stretch justify-center gap-2 flex-1 min-w-0 relative border-l border-gray-800/60 pl-2">
+          {/* Control lock + debug mode — fill height */}
+          <div className="flex flex-col justify-stretch gap-1 min-w-0 min-h-0 flex-1 relative border-l border-gray-800/60 pl-3 w-28">
             <button
               onClick={() => {
                 if (!controlEnabled) return;
@@ -285,14 +285,15 @@ export default function TopBar() {
                 ws.sendCommand(cmd);
               }}
               disabled={!controlEnabled}
-              className={`w-full py-2 xl:py-4 rounded-xl text-[10px] xl:text-sm font-bold uppercase tracking-wider border transition-all text-center ${debugMode
+              className={`flex-1 min-h-0 flex items-center justify-center px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider border transition-all ${
+                debugMode
                   ? controlEnabled
                     ? 'bg-yellow-800/60 border-yellow-600 text-yellow-300 shadow-[0_0_6px_rgba(234,179,8,0.3)]'
                     : 'bg-yellow-900/40 border-yellow-800 text-yellow-700 cursor-not-allowed'
                   : controlEnabled
                     ? 'bg-gray-800 border-gray-700 text-gray-500 hover:border-gray-500'
                     : 'bg-gray-900 border-gray-800 text-gray-700 cursor-not-allowed'
-                }`}
+              }`}
               title={controlEnabled ? undefined : 'Viewer mode: controls locked'}
             >
               {debugMode ? '🔓 DEBUG' : '🔒 SAFE'}
@@ -308,10 +309,11 @@ export default function TopBar() {
                   setShowUnlockForm((v) => !v);
                 }
               }}
-              className={`justify-center w-full py-2 xl:py-4 rounded-xl text-[10px] xl:text-sm font-semibold uppercase tracking-wider border flex ${controlEnabled
+              className={`flex-1 min-h-0 flex items-center justify-center px-2 py-1 rounded-md text-xs font-semibold uppercase tracking-wider border ${
+                controlEnabled
                   ? 'border-green-500 bg-green-900/40 text-green-300 hover:bg-green-800/60'
                   : 'border-gray-700 bg-gray-900 text-gray-400 hover:bg-gray-800'
-                }`}
+              }`}
             >
               {controlEnabled ? 'CONTROLLER' : 'VIEWER'}
             </button>
@@ -322,7 +324,7 @@ export default function TopBar() {
                   e.preventDefault();
                   unlock(passwordInput);
                 }}
-                className="absolute top-full right-0 mt-1 flex flex-col gap-1 bg-background border border-gray-700 rounded px-2 py-2 shadow-lg z-20 w-48"
+                className="absolute top-full right-0 mt-1 flex flex-col gap-1 bg-background border border-gray-700 rounded px-2 py-2 shadow-lg z-20 w-56"
               >
                 <input
                   type="password"
@@ -347,22 +349,24 @@ export default function TopBar() {
             )}
           </div>
 
-          {/* Abort buttons */}
-          <div className="flex flex-col justify-center gap-2 flex-1 min-w-0 border-l border-gray-800/60 pl-2">
+          {/* Abort buttons — fill height, equal share */}
+          <div className="flex flex-col justify-stretch gap-1 min-w-0 min-h-0 flex-1 border-l border-gray-800/60 pl-3 w-28">
             <button
               onClick={handleEngineAbort}
               disabled={!controlEnabled}
-              className="w-full py-2 xl:py-3 bg-amber-800 hover:bg-amber-700 active:bg-amber-900 border border-amber-600
-                         text-white font-semibold text-[10px] xl:text-xs rounded-xl tracking-wider transition-colors disabled:bg-amber-900 disabled:border-amber-900 disabled:text-amber-700 disabled:cursor-not-allowed"
+              className="flex-1 min-h-0 flex items-center justify-center px-2 py-1 rounded-md text-xs font-semibold uppercase tracking-wider
+                         bg-amber-800 hover:bg-amber-700 active:bg-amber-900 border border-amber-600 text-white transition-colors
+                         disabled:bg-amber-900 disabled:border-amber-900 disabled:text-amber-700 disabled:cursor-not-allowed"
               title={controlEnabled ? undefined : 'Viewer mode: controls locked'}
             >
-              ENG ABORT
+              ENGINE ABORT
             </button>
             <button
               onClick={handleGseAbort}
               disabled={!controlEnabled}
-              className="w-full py-2 xl:py-3 bg-orange-800 hover:bg-orange-700 active:bg-orange-900 border border-orange-600
-                         text-white font-semibold text-[10px] xl:text-xs rounded-xl tracking-wider transition-colors disabled:bg-orange-900 disabled:border-orange-900 disabled:text-orange-700 disabled:cursor-not-allowed"
+              className="flex-1 min-h-0 flex items-center justify-center px-2 py-1 rounded-md text-xs font-semibold uppercase tracking-wider
+                         bg-orange-800 hover:bg-orange-700 active:bg-orange-900 border border-orange-600 text-white transition-colors
+                         disabled:bg-orange-900 disabled:border-orange-900 disabled:text-orange-700 disabled:cursor-not-allowed"
               title={controlEnabled ? undefined : 'Viewer mode: controls locked'}
             >
               GSE ABORT
@@ -370,8 +374,8 @@ export default function TopBar() {
             <button
               onClick={handleEmergencyAbort}
               disabled={!controlEnabled}
-              className="w-full py-2 xl:py-3 bg-red-700 hover:bg-red-600 active:bg-red-800 border border-red-500
-                         text-white font-semibold text-[10px] xl:text-xs rounded-xl tracking-wider transition-colors
+              className="flex-1 min-h-0 flex items-center justify-center px-2 py-1 rounded-md text-xs font-semibold uppercase tracking-wider
+                         bg-red-700 hover:bg-red-600 active:bg-red-800 border border-red-500 text-white transition-colors
                          shadow-[0_0_6px_rgba(239,68,68,0.4)] disabled:bg-red-900 disabled:border-red-900 disabled:text-red-700 disabled:cursor-not-allowed"
               title={controlEnabled ? undefined : 'Viewer mode: controls locked'}
             >

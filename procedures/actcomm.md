@@ -8,11 +8,7 @@
 - [ ] Confirm pneumatic supply lines are correctly routed and labeled.
 - [ ] Verify rocket-side and GSE-side pneumatic hoses and actuator harnesses are routed and restrained (no kinks, no abrasion, clear of pinch points, hot surfaces, vents, and moving hardware).
 - [ ] Verify solenoid valve flow directions match P&ID.
-- [ ] Confirm correct Normally Closed (NC) / Normally Open (NO) state for each valve.
-- [ ] Manually cycle pneumatic actuators to confirm full open/close travel.
 - [ ] Confirm no binding or mechanical interference.
-- [ ] Inspect fittings for leaks after pneumatic cycling.
-- [ ] Verify no audible leaks, no pressure decays, or fitting movement/backing out during cycling.
 - [ ] Confirm electrical connectors to solenoids are secure.
 - [ ] Confirm each actuator is tagged/identifiable.
 - [ ] **TELL GSE MANAGER ACTUATORS ARE CONNECTED PROPERLY.**
@@ -20,7 +16,11 @@
 
 ## Dry Run & Testing
 - [ ] **BREAK HERE. WAIT FOR MISSION CONTROL MANAGER TO COMMENCE REMOTE OPERATIONS / HOTFIRE ATTEMPT.**
+- [ ] **WAIT FOR PAD MANAGER TO ANNOUNCE START OF GSE LOW PRESS (~150 PSI) BEFORE INTRODUCING PNEUMATIC PRESSURE TO ACTUATORS.**
+- [ ] During initial GSE low press, check for audible leaks, pressure decay, or fitting movement/backing out in coordination with GSE Manager.
+- [ ] During initial GSE low press, monitor all pneumatic actuators for unintended motion or jitter; do not proceed to higher pressures until anomalies are resolved.
 - [ ] Actively communicate with Mission Control Team to confirm all actuators are correctly mapped and respond to the intended commands.
+- [ ] While confirming mapping, verify that each actuator’s commanded open/close state matches the intended Normally Closed (NC) / Normally Open (NO) configuration for its associated valve.
 - [ ] Monitor solenoid actuation during dry run.
 - [ ] For every command, verify the correct actuator responded and the actuator moved in the correct direction. 
 - [ ] Confirm the resulting physical valve state matches the commanded state, including that all ball valves driven by pneumatic actuators rotate the full 90° between open and closed.

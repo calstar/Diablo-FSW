@@ -2,7 +2,7 @@
 
 *Role: Operates 6k psi K-bottle and manages the high-pressure portion of GSE.*
 
-## GSE High Pressure Setup
+## Setup
 - [ ] Position 6k psi K-bottle securely at designated high-pressure GSE station.
 - [ ] Confirm the bottle is strapped and cannot tip or shift.
 - [ ] Inspect regulator and fittings for visible damage before connection.
@@ -13,7 +13,10 @@
 - [ ] Confirm regulator output using downstream (outlet) pressure gauge.
 - [ ] **TELL GSE MANAGER HIGH PRESSURE K-BOTTLE IS SET.**
 
-## Operational Phases
+## Dry Run & Testing
+- [ ] **WAIT FOR MISSION CONTROL MANAGER TO PROCEED TO PRESS PROOF.**
+
+## Press Proof
 - [ ] **BREAK HERE. WAIT FOR OPERATIONS MANAGER TO GIVE THE GO TO BEGIN FLUID/GAS PREP.**
 - [ ] Slowly open main bottle valve when authorized.
 - [ ] Monitor upstream (inlet) and downstream (outlet) pressures continuously.
@@ -21,7 +24,10 @@
 - [ ] Ensure supply pressure remains within the expected range during pressurization (within 3500 to 4000).
 - [ ] **TELL GSE MANAGER / MISSION CONTROL OF ANY PRESSURE SUPPLY ISSUES OR LINE DROPS IMMEDIATELY.**
 
-## Depressurization & Safing
+## Fill
+- [ ] **WAIT FOR MISSION CONTROL MANAGER TO PROCEED TO FILL.**
+
+## Fire
 - [ ] Close main valve on 6k psi K-bottle once safing command is received.
 - [ ] Verify regulator output pressure begins to decay.
 - [ ] Assist GSE Manager in opening manual hose vent valves to bleed residual line pressure.

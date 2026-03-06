@@ -2,7 +2,7 @@
 
 *Role: Requires cryogenic PPE. Operates LOX dewar and LOX fill system. Communicates with Pad Manager and Mission Control Manager for fill level. DO NOT ALLOW VALVES TO FREEZE.*
 
-## Preparation
+## Setup
 - [ ] **DON CRYO GEAR** (Face shield, safety glasses, cryogenic gloves, apron).
 - [ ] Inspect LOX dewar for proper positioning and stability.
 - [ ] Connect GSE LOX fill JIC to LOX dewar.
@@ -15,7 +15,13 @@
 - [ ] Confirm relief path is clear and vent outlets are unobstructed.
 - [ ] **CONFIRM PREP SIGNAL WITH SAFETY OFFICER / CONTROL SYSTEM OFFICER (DAQ SENSE power energized, signal continuity/comms check).**
 
-## Fill Control
+## Dry Run & Testing
+- [ ] **WAIT FOR MISSION CONTROL MANAGER TO PROCEED TO PRESS PROOF.**
+
+## Press Proof
+- [ ] **WAIT FOR MISSION CONTROL MANAGER TO PROCEED TO FILL.**
+
+## Fill
 - [ ] **BREAK HERE. WAIT FOR OPERATIONS MANAGER TO GIVE THE GO TO BEGIN CRYOGEN FILL.**
 - [ ] Verify starting valve alignments:
       - [ ] Fill line vent valve: **CLOSED**
@@ -37,10 +43,10 @@
             - [ ] Disconnect fill line from tank fill valve.
             - [ ] Drain tank through connected GSE dump valve.
             - [ ] Tighten fittings and re-attempt fill.
-- [ ] Fill lox tank until lox vents from tank vent valve. 
-- [ ] Close lox fill line main valve.
-- [ ] Instruct operator to end ox fill and return to armed.
-- [ ] Inspect that correct solenoids and valves close at the end of ox fill.
+- [ ] Fill LOX tank until LOX vents from tank vent valve. 
+- [ ] Close LOX fill line main valve.
+- [ ] Instruct operator to end oxidizer fill and return to **ARMED**.
+- [ ] Inspect that correct solenoids and valves close at the end of oxidizer fill.
 - [ ] Maintain continuous comms with Pad Manager and Mission Control Manager.
 - [ ] Report pressure readings and visible venting status.
 - [ ] **BREAK HERE. WAIT FOR VIDCOMM / MISSION CONTROL TO CONFIRM LEVEL / VENTING.**
@@ -50,3 +56,6 @@
 - [ ] Process QD disconnect (use QD Disconnect Piston if installed).
 - [ ] Inspect fittings post-disconnect for frost damage or leakage.
 - [ ] **TELL PAD MANAGER / MISSION CONTROL LOX FILL IS COMPLETE.**
+
+## Fire
+- [ ] **WAIT FOR MISSION CONTROL MANAGER TO PROCEED TO FIRE.**

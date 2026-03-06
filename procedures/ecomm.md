@@ -2,7 +2,7 @@
 
 *Role: Ensure core avionics and DAQ are set up, functioning properly, and communicating data accurately.*
 
-## Setup & DAQ Verification
+## Setup
 - [ ] Power on DAQ and core avionics systems.
 - [ ] Confirm DAQ is connected to operating and backup laptops.
 - [ ] Connect and configure DAQ parameters per test configuration.
@@ -19,7 +19,7 @@
 - [ ] Confirm no dropped packets or unstable communication.
 - [ ] **TELL AVIONICS MANAGER DAQ AND SENSORS ARE FUNCTIONAL.**
 
-## Dry Run & Data Validation
+## Dry Run & Testing
 - [ ] Run full system dry run.
 - [ ] Confirm state transitions reflect correctly in telemetry.
 - [ ] Verify valve state indicators match ACTCOMM feedback.
@@ -30,15 +30,19 @@
 - [ ] Confirm telemetry updates properly during each triggered event.
 - [ ] Confirm data logging is active during dry run.
 - [ ] **BREAK HERE. WAIT FOR MISSION CONTROL MANAGER TO COMMENCE REMOTE OPERATIONS / HOTFIRE ATTEMPT.**
-- [ ] Monitor real-time telemetry dashboard continuously.
 
-## Active Operations
+## Press Proof
+- [ ] Monitor real-time telemetry dashboard continuously.
 - [ ] Continuously monitor tank pressures during pressurization.
 - [ ] Monitor regulator behavior and pressure stability.
+
+## Fill
 - [ ] Monitor temperature sensors for abnormal rise.
-- [ ] Monitor load cells during ignition and burn.
 - [ ] Watch for sensor dropouts or frozen values.
 - [ ] Watch for pressure oscillations or rapid deviations.
+
+## Fire
+- [ ] Monitor load cells during ignition and burn.
 - [ ] **TELL MISSION CONTROL MANAGER IMMEDIATELY IF ANY TELEMETRY ANOMALY IS DETECTED.**
 - [ ] Confirm telemetry remains synchronized throughout burn.
 - [ ] Verify all system data files are actively writing during test.

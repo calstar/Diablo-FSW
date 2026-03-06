@@ -2,7 +2,7 @@
 
 *Role: Main manager of all electrical systems. Oversees power systems, DAQ, and maintains coordination with Mission Control Manager.*
 
-## Electrical Setup & Overview
+## Setup
 - [ ] Inspect overall setup of electrical power systems.
 - [ ] Verify DAQ system is physically secured and powered correctly.
 - [ ] Confirm power supplies are set to correct voltage/current limits.
@@ -14,7 +14,7 @@
 - [ ] Confirm backup laptops and power sources are available.
 - [ ] **TELL MISSION CONTROL MANAGER ALL ELECTRICAL SYSTEMS ARE SET UP.**
 
-## Pre-Test Procedures
+## Dry Run & Testing
 - [ ] **BREAK HERE. WAIT FOR OPERATIONS MANAGER TO GIVE THE GO TO BEGIN.**
 - [ ] Turn on DAQ power upon command. 
 - [ ] Verify DAQ boots up correctly and connects to the telemetry interface.
@@ -25,14 +25,17 @@
 - [ ] Confirm no unexpected current spikes.
 - [ ] **TELL MISSION CONTROL MANAGER AVIONICS SIGNAL IS NOMINAL.**
 
-## Hotfire Operations
+## Press Proof
+- [ ] **WAIT FOR MISSION CONTROL MANAGER TO PROCEED TO FILL.**
+
+## Fill
 - [ ] Ensure data rates and sensors are all reading appropriate values with no spikes. 
 - [ ] Monitor power consumption during fill and pressurization.
+
+## Fire
 - [ ] **TELL MISSION CONTROL MANAGER AVIONICS IS STEADY FOR IGNITION.**
 - [ ] Remain prepared to de-energize immediately upon ABORT call.
 - [ ] **BREAK HERE. WAIT FOR MISSION CONTROL MANAGER TO TELL YOU TO DE-ENERGIZE WHEN SAFE.**
-
-## System Safing
 - [ ] De-energize power electronics upon command from Mission Control/Pad Manager.
 - [ ] Confirm voltage drops to zero.
 - [ ] Verify DAQ shutdown sequence is completed properly.

@@ -6,9 +6,13 @@
 - [ ] Position 6k psi K-bottle securely at designated high-pressure GSE station.
 - [ ] Confirm the bottle is strapped and cannot tip or shift.
 - [ ] Inspect regulator and fittings for visible damage before connection.
-- [ ] Connect the high-pressure K-bottle to GSE inlet.
+- [ ] Connect the high-pressure K-bottle to GSE inlet. Confirm both sides of the hose are connected, and that they are the correct hose line.
 - [ ] Tighten fittings to proper torque (do not overtighten).
+- [ ] Confirm with mission control that high-press-control is CLOSED, and RPV is closed.
+- [ ] Decrease the regulator to all the way loosened.
 - [ ] Slowly open the valve to check for leaks, then close.
+- [ ] Open the K-bottle again.
+- [ ] Continuously monitor pressures and ensure they align with DAQ/Mission Control readouts.
 - [ ] Set high-pressure regulator to required operating parameter (e.g., **4000 psi** per procedure).
 - [ ] Confirm regulator output using downstream (outlet) pressure gauge.
 - [ ] **TELL GSE MANAGER HIGH PRESSURE K-BOTTLE IS SET.**

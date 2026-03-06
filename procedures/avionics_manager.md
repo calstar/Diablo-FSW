@@ -3,8 +3,8 @@
 *Role: Main manager of all electrical systems. Oversees power systems, DAQ, and maintains coordination with Mission Control Manager.*
 
 ## Setup
-- [ ] Confirm reasonable ambient readings across: - [ ] 7 PTs - [ ] 3 HPTs - [ ] 3 LCs - [ ] 4 TCs - [ ] 4 RTDs
 - [ ] Inspect overall setup of electrical power systems: 2 PT boards, load cells, 2 actuator boards (12 volt & 24 volt), TC board, RTD board, and power distribution board.
+- [ ] Confirm reasonable ambient readings across: - [ ] 7 PTs - [ ] 3 HPTs - [ ] 3 LCs - [ ] 4 TCs - [ ] 4 RTDs
 - [ ] Confirm that the 12 volt solenoids are plugged into the 12 volt board.
 - [ ] Confirm that the 24 volt solenoids are plugged into the 24 volt board. 
 - [ ] Verify DAQ system is physically secured and powered correctly.
@@ -20,9 +20,13 @@
 - [ ] Turn on DAQ power upon command. 
 - [ ] Verify DAQ boots up correctly and connects to the telemetry interface.
 - [ ] Confirm the power supply is operating in constant voltage mode.
-- [ ] Ensure the DAQ briefcase is operating properly
-- [ ] Confirm the valve actuation commands register properly
+- [ ] Ensure the DAQ briefcase is operating properly.
+- [ ] Confirm the valve actuation commands register properly.
 
+## Press Proof
+- [ ] Confirm that all valve actuation commands register properly.
+- [ ] Confirm the pressure is at an acceptable value at 600 psi .
+- [ ] Ensure that all sensors are operating appropriately.
 
 ## Dry Run + Testing  
 - [ ] Coordinate dry run with ECOMM and ACTCOMM.

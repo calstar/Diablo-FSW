@@ -158,6 +158,12 @@ export default function StatusPage() {
                 else if (b.boardState === 2) boardStateLabel = 'Active';
                 else if (b.boardState === 3) boardStateLabel = 'Abort';
                 else if (b.boardState === 4) boardStateLabel = 'Abort done';
+                else if (b.boardState === 5) boardStateLabel = 'Conn Loss';
+                else if (b.boardState === 6) boardStateLabel = 'No Conn Abort';
+                else if (b.boardState === 7) boardStateLabel = 'No Conn Abort (F)';
+                else if (b.boardState === 8) boardStateLabel = 'PT Abort';
+                else if (b.boardState === 9) boardStateLabel = 'No PT Abort';
+                else if (b.boardState === 10) boardStateLabel = 'Abort Finished';
 
                 const engineLabel = engineStateCodeToLabel(b.engineState);
 

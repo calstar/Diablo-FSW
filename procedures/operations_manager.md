@@ -27,7 +27,7 @@
 - [ ] Prioritize safety checks before:
   - [ ] Fuel Fill
   - [ ] Cryogen Fill
-- [ ] Confirm clear zone and safe LOS before fluid fills.
+- [ ] Confirm clear zone before fluid fills.
 - [ ] **TELL MISSION CONTROL / PAD MANAGERS TO PROCEED WITH FLUID FILLS UPON CONFIRMATION OF CLEAR ZONE (PER MASTER PROCEDURE).**
 
 ## Fire

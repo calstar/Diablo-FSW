@@ -1,3 +1,6 @@
+#include <arpa/inet.h>
+#include <ifaddrs.h>
+#include <net/if.h>
 #include <signal.h>
 
 #include <array>
@@ -12,6 +15,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 #include "../../daq_comms/include/comms/messages/board/BoardHeartbeatMessage.hpp"
@@ -37,6 +41,33 @@ std::vector<uint8_t> build_server_heartbeat_packet() {
     pkt[5] = static_cast<uint8_t>((ts >> 24) & 0xFF);
     pkt[6] = 0;  // engine_state = SAFE
     return pkt;
+}
+
+/** First non-loopback IPv4 iface whose address starts with \p prefix (e.g. "192.168.2.").
+ *  macOS does not ship `ip` (iproute2); the old shell pipeline left us on bogus "eth0". */
+std::string find_ipv4_interface_for_prefix(const std::string& prefix) {
+    struct ifaddrs* ifaddr = nullptr;
+    if (getifaddrs(&ifaddr) != 0)
+        return {};
+    std::string found;
+    for (struct ifaddrs* ifa = ifaddr; ifa != nullptr; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr == nullptr || (ifa->ifa_flags & IFF_LOOPBACK) != 0)
+            continue;
+        if (ifa->ifa_addr->sa_family != AF_INET)
+            continue;
+        char buf[INET_ADDRSTRLEN];
+        auto* sin = reinterpret_cast<struct sockaddr_in*>(ifa->ifa_addr);
+        if (inet_ntop(AF_INET, &sin->sin_addr, buf, sizeof(buf)) == nullptr)
+            continue;
+        std::string ip(buf);
+        if (ip.size() >= prefix.size() && ip.compare(0, prefix.size(), prefix) == 0 &&
+            ifa->ifa_name) {
+            found = ifa->ifa_name;
+            break;
+        }
+    }
+    freeifaddrs(ifaddr);
+    return found;
 }
 }  // namespace
 #include "calibration/PTCalibration.hpp"
@@ -490,6 +521,19 @@ int main(int argc, char* argv[]) {
                   << (cfg.enabled ? " ✅" : " ❌") << std::endl;
     }
 
+    auto udp_endpoint_key = [](const std::string& ip, uint16_t port) {
+        return ip + ":" + std::to_string(port);
+    };
+    // board_id → config (for board_sim / USE_SIM when many boards share one source IP + distinct
+    // UDP ports)
+    std::unordered_map<int, BoardConfig> board_id_to_cfg;
+    for (const auto& [ip, cfg] : board_map) {
+        (void)ip;
+        if (cfg.board_id >= 0)
+            board_id_to_cfg[cfg.board_id] = cfg;
+    }
+    std::unordered_map<std::string, BoardConfig> sim_endpoint_cfg;
+
     // ── System mode ──
     bool is_flight_daq = (config_path.find("flight") != std::string::npos);
     fsw::config::SystemState system_state =
@@ -525,19 +569,25 @@ int main(int argc, char* argv[]) {
     std::string network_interface = "eth0";
     std::string target_subnet = is_flight_daq ? "192.168.3." : "192.168.2.";
 
-    std::string cmd = "ip -4 addr show | grep -B 2 'inet.*" + target_subnet +
-                      "' | grep -E '^[0-9]+:' | head -1 | awk -F: '{print $2}' | tr -d ' '";
-    FILE* fp = popen(cmd.c_str(), "r");
-    if (fp) {
-        char iface[64] = {0};
-        if (fgets(iface, sizeof(iface), fp)) {
-            size_t len = strlen(iface);
-            if (len > 0 && iface[len - 1] == '\n')
-                iface[len - 1] = '\0';
-            if (strlen(iface) > 0)
-                network_interface = iface;
+    std::string detected = find_ipv4_interface_for_prefix(target_subnet);
+    if (!detected.empty()) {
+        network_interface = std::move(detected);
+    } else {
+        // Fallback for Linux when getifaddrs did not match (unusual): try iproute2 `ip` if present.
+        std::string cmd = "ip -4 addr show 2>/dev/null | grep -B 2 'inet.*" + target_subnet +
+                          "' | grep -E '^[0-9]+:' | head -1 | awk -F: '{print $2}' | tr -d ' '";
+        FILE* fp = popen(cmd.c_str(), "r");
+        if (fp) {
+            char iface[64] = {0};
+            if (fgets(iface, sizeof(iface), fp)) {
+                size_t len = strlen(iface);
+                if (len > 0 && iface[len - 1] == '\n')
+                    iface[len - 1] = '\0';
+                if (strlen(iface) > 0)
+                    network_interface = iface;
+            }
+            pclose(fp);
         }
-        pclose(fp);
     }
     std::cout << "[Discovery] Interface: " << network_interface << std::endl;
 
@@ -702,13 +752,23 @@ int main(int argc, char* argv[]) {
                 auto parsed =
                     pipeline.get_parser().parse_board_heartbeat(hb->data.data(), hb->data.size());
                 if (parsed && parsed->is_valid) {
+                    auto id_cfg = board_id_to_cfg.find(parsed->heartbeat.board_id);
+                    if (id_cfg != board_id_to_cfg.end()) {
+                        sim_endpoint_cfg[udp_endpoint_key(hb->source_ip, hb->source_port)] =
+                            id_cfg->second;
+                    }
                     // New firmware omits board_type from heartbeat; override from config when known
                     auto cfg_it = board_map.find(hb->source_ip);
-                    if (cfg_it != board_map.end() &&
+                    const BoardConfig* cfg_for_type = nullptr;
+                    if (id_cfg != board_id_to_cfg.end())
+                        cfg_for_type = &id_cfg->second;
+                    else if (cfg_it != board_map.end())
+                        cfg_for_type = &cfg_it->second;
+                    if (cfg_for_type &&
                         parsed->heartbeat.board_type ==
                             daq_comms::protocol::DiabloBoardPacketParser::BoardType::UNKNOWN) {
                         parsed->heartbeat.board_type =
-                            config_board_type_to_parser(cfg_it->second.type);
+                            config_board_type_to_parser(cfg_for_type->type);
                     }
                     // MAC for FSWConfigManager (same formula as BoardDiscovery)
                     std::hash<std::string> hasher;
@@ -778,6 +838,7 @@ int main(int argc, char* argv[]) {
 
         packet_count++;
         const std::string& source_ip = pipeline.last_source_ip();
+        const uint16_t source_port = pipeline.last_source_port();
         packets_per_board[source_ip]++;
 
         // Use system_clock (epoch) so timestamps align with JS Date.now() — prevents
@@ -786,25 +847,32 @@ int main(int argc, char* argv[]) {
                                             std::chrono::system_clock::now().time_since_epoch())
                                             .count();
 
-        // ── Route based on source IP → board type (config, then 127.0.0.x simulator fallback,
-        // then discovery, else treat as PT) ──
+        // ── Route: (IP, UDP port) from BOARD_HEARTBEAT board_id (sim), else IP, else 127.0.0.x
+        // index, else discovery. macOS often cannot bind 127.0.0.2+; sim then shares one IP → must
+        // use port-keyed map learned from heartbeat.
         auto board_it = board_map.find(source_ip);
         const BoardConfig* effective_cfg = nullptr;
-        if (board_it != board_map.end() && board_it->second.enabled)
-            effective_cfg = &board_it->second;
-        else if (source_ip.compare(0, 8, "127.0.0.") == 0 && !board_order.empty()) {
-            // 127.0.0.2→first board, 127.0.0.3→second, etc. 127.0.0.1→first (fallback when bind
-            // fails)
-            int idx = (source_ip.size() >= 9) ? (std::atoi(source_ip.c_str() + 8) - 2) : -1;
-            if (idx < 0)
-                idx = 0;  // 127.0.0.1 or malformed: use first board
-            if (idx < static_cast<int>(board_order.size()))
-                effective_cfg = &board_order[idx].second;
+        auto ep_it = sim_endpoint_cfg.find(udp_endpoint_key(source_ip, source_port));
+        if (ep_it != sim_endpoint_cfg.end())
+            effective_cfg = &ep_it->second;
+        if (!effective_cfg) {
+            if (board_it != board_map.end() && board_it->second.enabled)
+                effective_cfg = &board_it->second;
+            else if (source_ip.compare(0, 8, "127.0.0.") == 0 && !board_order.empty()) {
+                // 127.0.0.2→first board, 127.0.0.3→second, etc. 127.0.0.1→first (fallback when bind
+                // fails)
+                int idx = (source_ip.size() >= 9) ? (std::atoi(source_ip.c_str() + 8) - 2) : -1;
+                if (idx < 0)
+                    idx = 0;  // 127.0.0.1 or malformed: use first board
+                if (idx < static_cast<int>(board_order.size()))
+                    effective_cfg = &board_order[idx].second;
+            }
         }
-        // Use board type from config even when disabled — we still publish actuator/PT data to DB
-        BoardType board_type = board_it != board_map.end()
-                                   ? board_it->second.type
-                                   : (effective_cfg ? effective_cfg->type : BoardType::UNKNOWN);
+        BoardType board_type = BoardType::UNKNOWN;
+        if (effective_cfg)
+            board_type = effective_cfg->type;
+        else if (board_it != board_map.end())
+            board_type = board_it->second.type;
         if (board_type == BoardType::UNKNOWN) {
             auto discovered = discovery.get_board_by_ip(source_ip);
             if (discovered) {
@@ -826,14 +894,21 @@ int main(int argc, char* argv[]) {
         if (elodin_connected && elodin_client.is_connected() && !batch.value().self_tests.empty()) {
             elodin_client.begin_batch();
             for (const auto& st_packet : batch.value().self_tests) {
-                // board_id is retrieved from heartbeat or routing. However, self test doesn't have board_id in the packet.
-                // We use discovery to map IP to board_id.
-                auto cfg_it = board_map.find(source_ip);
-                uint8_t board_id = (cfg_it != board_map.end() && cfg_it->second.board_id >= 0) ? cfg_it->second.board_id : 0;
-                
+                // board_id is retrieved from heartbeat or routing. However, self test doesn't have
+                // board_id in the packet. We use discovery to map IP to board_id.
+                uint8_t board_id = 0;
+                if (effective_cfg && effective_cfg->board_id >= 0)
+                    board_id = static_cast<uint8_t>(effective_cfg->board_id);
+                else {
+                    auto cfg_it = board_map.find(source_ip);
+                    if (cfg_it != board_map.end() && cfg_it->second.board_id >= 0)
+                        board_id = static_cast<uint8_t>(cfg_it->second.board_id);
+                }
+
                 if (board_id == 0) {
                     auto discovered = discovery.get_board_by_ip(source_ip);
-                    if (discovered) board_id = discovered->signature.board_id;
+                    if (discovered)
+                        board_id = discovered->signature.board_id;
                 }
 
                 if (board_id != 0) {
@@ -848,10 +923,12 @@ int main(int argc, char* argv[]) {
                     }
                 }
             }
-            if (elodin_client.flush_batch()) elodin_publish_count++;
-            
+            if (elodin_client.flush_batch())
+                elodin_publish_count++;
+
             std::array<uint8_t, 4096> drain_buf;
-            while (elodin_client.read_data(drain_buf.data(), drain_buf.size()) > 0) {}
+            while (elodin_client.read_data(drain_buf.data(), drain_buf.size()) > 0) {
+            }
         }
 
         // ── Begin batch: all publishes from this packet go into one buffer ──

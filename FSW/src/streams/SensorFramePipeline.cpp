@@ -26,6 +26,7 @@ std::optional<daq_comms::protocol::SensorBatch> SensorFramePipeline::poll() {
     uint16_t source_port = 0;
     ssize_t received = socket_->receive_from(receive_buffer_.data(), receive_buffer_.size(),
                                              last_source_ip_, source_port);
+    last_source_port_ = (received > 0) ? source_port : 0;
     if (received <= 0) {
         if (received < 0 && !socket_->last_error().empty()) {
             static size_t error_count = 0;
@@ -144,8 +145,10 @@ std::optional<SensorFramePipeline::LastHeartbeat> SensorFramePipeline::get_last_
     LastHeartbeat out;
     out.data = std::move(last_heartbeat_buffer_);
     out.source_ip = std::move(last_heartbeat_source_ip_);
+    out.source_port = last_heartbeat_source_port_;
     last_heartbeat_buffer_.clear();
     last_heartbeat_source_ip_.clear();
+    last_heartbeat_source_port_ = 0;
     return out;
 }
 

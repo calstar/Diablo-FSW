@@ -84,11 +84,22 @@ class SimulatedBoard:
                     flush=True,
                 )
             except Exception:
-                print(
-                    f"[{self.name}] Warning: Could not bind to "
-                    f"{self.ip} or {fallback_ip}. Sending from default interface.",
-                    flush=True,
-                )
+                # macOS often lacks 127.0.0.2+ on lo0 without aliases; unbound sockets share one
+                # source IP and daq_bridge mis-routes every board as PT #1 (spikes, no HP PT).
+                try:
+                    self.sock.bind(("", 0))
+                    print(
+                        f"[{self.name}] Bound ephemeral UDP port "
+                        f"(config IP {self.config.get('ip')} and {fallback_ip} unavailable). "
+                        f"daq_bridge keys sim by source port + heartbeat board_id.",
+                        flush=True,
+                    )
+                except Exception as e2:
+                    print(
+                        f"[{self.name}] Warning: Could not bind to {self.ip}, {fallback_ip}, or "
+                        f"0.0.0.0:0 ({e2}). Sending from OS default — sim may be wrong if multiple boards.",
+                        flush=True,
+                    )
 
         self.thread = threading.Thread(target=self._run)
         self.thread.daemon = True

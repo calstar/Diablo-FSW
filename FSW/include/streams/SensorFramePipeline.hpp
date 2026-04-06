@@ -44,6 +44,11 @@ public:
         return last_source_ip_;
     }
 
+    /** UDP source port of the last received packet (for multi-board sim on one host IP). */
+    uint16_t last_source_port() const {
+        return last_source_port_;
+    }
+
     /**
      * @brief Check if pipeline is ready
      */
@@ -78,6 +83,7 @@ public:
     struct LastHeartbeat {
         std::vector<uint8_t> data;
         std::string source_ip;
+        uint16_t source_port = 0;
     };
     std::optional<LastHeartbeat> get_last_heartbeat();
 
@@ -88,10 +94,12 @@ private:
     std::vector<uint8_t> receive_buffer_;
     std::string last_error_;
     std::string last_source_ip_;
+    uint16_t last_source_port_ = 0;
 
     // When last poll() received a BOARD_HEARTBEAT, copy for main loop to process
     std::vector<uint8_t> last_heartbeat_buffer_;
     std::string last_heartbeat_source_ip_;
+    uint16_t last_heartbeat_source_port_ = 0;
 
     static constexpr size_t MAX_PACKET_SIZE =
         512;  // DiabloAvionics max packet size (from DAQv2-Comms.h)

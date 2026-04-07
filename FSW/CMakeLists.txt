@@ -192,7 +192,9 @@ if(EXISTS "${USOCKETS_DIR}/uSockets/src")
     file(GLOB USOCKETS_SOURCES "${USOCKETS_DIR}/uSockets/src/*.c" "${USOCKETS_DIR}/uSockets/src/eventing/*.c" "${USOCKETS_DIR}/uSockets/src/crypto/*.c")
     add_library(usockets STATIC ${USOCKETS_SOURCES})
     target_include_directories(usockets PUBLIC ${USOCKETS_DIR}/uSockets/src)
-    target_compile_definitions(usockets PRIVATE LIBUS_USE_OPENSSL LIBUS_NO_SSL)
+    # LIBUS_NO_SSL must not be set with LIBUS_USE_OPENSSL (internal.h hides SSL prototypes).
+    target_compile_definitions(usockets PRIVATE LIBUS_USE_OPENSSL)
+    target_link_libraries(usockets PRIVATE OpenSSL::SSL OpenSSL::Crypto)
     # fsw_web_bridge disabled until main/loop/ifstream fixes are in
     if(FALSE)
     add_executable(fsw_web_bridge src/fsw_web_bridge.cpp)

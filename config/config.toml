@@ -412,10 +412,10 @@ enable_serial_printing = false
 "LOX Vent"              = ["NC", 6, 12]
 "LOX Press"             = ["NO", 8, 12]
 "GSE Low Press Vent"    = ["NC", 5, 12]
-"Fuel Fill Press"       = ["NC", 10, 12]
+"Fuel Fill Press"       = ["NC", 2, 14]
 # Actuator Board #2 → board_id 14
 "Fuel Fill Vent"        = ["NC", 1, 14]
-"GSE LOX Fill Vent"     = ["NC", 2, 14]
+"GSE LOX Fill Vent"     = ["NC", 10, 14]
 "GSE High Press Control" = ["NC", 3, 14]
 "GSE Med Press Control" = ["NC", 4, 14]
 "GSE High Press Vent"   = ["NC", 5, 14]

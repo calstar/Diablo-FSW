@@ -547,6 +547,7 @@ const httpServer = http.createServer(async (req, res) => {
   res.end();
 });
 const wss = new WebSocketServer({ server: httpServer });
+let wsConnCounter = 0;
 
 function broadcast(message: object): void {
   if (wss.clients.size === 0) return;
@@ -585,14 +586,27 @@ setInterval(broadcastBoardStatus, 1000 / BOARD_STATUS_HZ);
 
 // ── Client connection ─────────────────────────────────────────────────────────
 
-wss.on('connection', (ws: WebSocket) => {
-  console.log('[ThinServer] Client connected');
+wss.on('connection', (ws: WebSocket, req) => {
+  const connId = `c${++wsConnCounter}`;
+  const openedAt = Date.now();
+  const remoteAddr =
+    (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim() ||
+    req.socket.remoteAddress ||
+    'unknown';
+  const userAgent = req.headers['user-agent'] ?? 'unknown';
+  let inboundMessages = 0;
+  let outboundMessages = 0;
+  let lastInboundAt = 0;
+  let lastOutboundAt = 0;
+  console.log(`[WS_BACKEND] ${JSON.stringify({ event: 'conn_open', ts: openedAt, connId, remoteAddr, userAgent, wsClients: wss.clients.size })}`);
 
   // Connection status
   send(ws, {
     type: MessageType.CONNECTION_STATUS, timestamp: Date.now(),
-    payload: { connected: true, elodinConnected: elodin.isConnected() },
+    payload: { connected: true, elodinConnected: elodin.isConnected(), connId },
   });
+  outboundMessages++;
+  lastOutboundAt = Date.now();
 
   // Mission start time
   if (firstPacketTimeMs !== null) {
@@ -607,17 +621,23 @@ wss.on('connection', (ws: WebSocket) => {
     type: MessageType.COUNTDOWN_TARGET_UPDATE, timestamp: Date.now(),
     payload: { targetTimeMs: countdownTargetMs },
   });
+  outboundMessages++;
+  lastOutboundAt = Date.now();
 
   // Current state
   send(ws, {
     type: MessageType.STATE_UPDATE, timestamp: Date.now(),
     payload: { currentState, stateName: SystemState[currentState] ?? 'UNKNOWN', timestamp: Date.now(), debugMode },
   });
+  outboundMessages++;
+  lastOutboundAt = Date.now();
 
   // Board status
   const boards = Array.from(boardsStatus.values());
   if (boards.length > 0) {
     send(ws, { type: MessageType.BOARD_STATUS_UPDATE, timestamp: Date.now(), payload: { boards } });
+    outboundMessages++;
+    lastOutboundAt = Date.now();
   }
 
   // Commanded actuator snapshot for current state (ACT_CMD.B*.CH* keys — same as [0x32] parser + GUI).
@@ -631,13 +651,19 @@ wss.on('connection', (ws: WebSocket) => {
         type: MessageType.SENSOR_UPDATE, timestamp: t,
         payload: { entity: cmdEntity, component: 'actuator_state_commanded', value, timestamp: t },
       });
+      outboundMessages++;
+      lastOutboundAt = Date.now();
     }
   }
 
   // Historical data
   sendHistoricalData(ws);
+  outboundMessages++;
+  lastOutboundAt = Date.now();
 
   ws.on('message', (data: Buffer) => {
+    inboundMessages++;
+    lastInboundAt = Date.now();
     try {
       const message = JSON.parse(data.toString());
       handleMessage(ws, message);
@@ -646,8 +672,31 @@ wss.on('connection', (ws: WebSocket) => {
     }
   });
 
-  ws.on('close', () => console.log('[ThinServer] Client disconnected'));
-  ws.on('error', (err) => console.error('[ThinServer] WS error:', err.message));
+  ws.on('close', (code, reasonBuffer) => {
+    const reason = reasonBuffer?.toString() ?? '';
+    console.log(`[WS_BACKEND] ${JSON.stringify({
+      event: 'conn_close',
+      ts: Date.now(),
+      connId,
+      code,
+      reason,
+      lifetimeMs: Date.now() - openedAt,
+      inboundMessages,
+      outboundMessages,
+      lastInboundAt: lastInboundAt || null,
+      lastOutboundAt: lastOutboundAt || null,
+      wsClients: wss.clients.size,
+    })}`);
+  });
+  ws.on('error', (err) => {
+    console.error(`[WS_BACKEND] ${JSON.stringify({
+      event: 'conn_error',
+      ts: Date.now(),
+      connId,
+      readyState: ws.readyState,
+      message: err.message,
+    })}`);
+  });
 });
 
 function sendHistoricalData(ws: WebSocket): void {

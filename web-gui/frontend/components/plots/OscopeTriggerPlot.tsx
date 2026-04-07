@@ -148,7 +148,6 @@ export default function OscopeTriggerPlot() {
   // Subscribe to encoder updates
   useEffect(() => {
     const ws = getWebSocketClient();
-    ws.connect();
 
     const unsub = ws.on(MessageType.SENSOR_UPDATE, (p: unknown) => {
       const update = p as SensorUpdate;

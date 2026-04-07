@@ -125,7 +125,6 @@ export default function TopBar() {
   }, [loadPressureBars]);
 
   useEffect(() => {
-    ws.connect();
     try {
       startDataCache(); // begin 1 Hz background sampling for plot history
     } catch (err) {

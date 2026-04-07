@@ -39,7 +39,6 @@ TEST_BACKEND_API_PORT="${TEST_BACKEND_API_PORT:-8182}"
 TEST_ACTUATOR_UDP_PORT="${TEST_ACTUATOR_UDP_PORT:-5015}"
 TEST_STARTUP_LISTEN_PORT="${TEST_STARTUP_LISTEN_PORT:-5014}"
 TEST_CONTROLLER_PORT="${TEST_CONTROLLER_PORT:-9997}"
-TEST_SEQUENCER_PORT="${TEST_SEQUENCER_PORT:-9996}"
 TEST_DB_PATH="$REPO_ROOT/.tmp/elodin_integration_test_$$"
 TEST_CONFIG="$REPO_ROOT/.tmp/integration_config_$$.toml"
 UDP_COMMANDS_FILE="$REPO_ROOT/.tmp/udp_commands_$$.json"
@@ -71,18 +70,12 @@ kill_stale_integration_processes() {
   for name in "${INTEGRATION_PROCESS_NAMES[@]}"; do
     # pkill -f matches the full command line; anchor to our repo to avoid
     # killing unrelated system processes with similar names.
-    if pkill -f "$REPO_ROOT.*$name" 2>/dev/null; then
-      killed=$((killed + 1))
-    fi
+    pkill -f "$REPO_ROOT.*$name" 2>/dev/null && killed=$((killed + 1)) || true
   done
   # Backend server (tsx src/server.ts) — match on the server.ts path
-  if pkill -f "$REPO_ROOT/web-gui/backend.*server\.ts" 2>/dev/null; then
-    killed=$((killed + 1))
-  fi
+  pkill -f "$REPO_ROOT/web-gui/backend.*server\.ts" 2>/dev/null && killed=$((killed + 1)) || true
   # Elodin DB — match on the test DB path pattern
-  if pkill -f "elodin.*integration_test" 2>/dev/null; then
-    killed=$((killed + 1))
-  fi
+  pkill -f "elodin.*integration_test" 2>/dev/null && killed=$((killed + 1)) || true
   # Also kill any process bound to our test ports
   for port in $TEST_ELODIN_PORT $TEST_DAQ_UDP_PORT $TEST_BACKEND_WS_PORT $TEST_ACTUATOR_UDP_PORT $TEST_STARTUP_LISTEN_PORT; do
     lsof -ti ":$port" 2>/dev/null | xargs kill 2>/dev/null || true
@@ -99,11 +92,7 @@ kill_stale_integration_processes() {
   fi
 }
 
-# shellcheck disable=SC2317  # EXIT trap; body is reachable at teardown
 cleanup() {
-  # Never let teardown fail the CI job: kill/OOM/SIGKILL on children makes `wait` non-zero,
-  # and with `set -e` bash would exit 1 after a passing test when reaping background jobs.
-  set +e
   echo ""
   echo "🧹 Cleaning up..."
   # First kill tracked PIDs (graceful, then force)
@@ -115,7 +104,7 @@ cleanup() {
     kill -9 "$pid" 2>/dev/null || true
   done
   # Then sweep for anything that escaped PID tracking (e.g. child processes)
-  kill_stale_integration_processes || true
+  kill_stale_integration_processes
   if [ -n "${INTEGRATION_SAVE_LOGS:-}" ]; then
     mkdir -p /tmp/integration_logs
     cp "$REPO_ROOT/.tmp/integration_"*"_$$.log" /tmp/integration_logs/ 2>/dev/null || true
@@ -125,11 +114,6 @@ cleanup() {
   rm -f "$TEST_CONFIG" 2>/dev/null || true
   rm -f "$UDP_COMMANDS_FILE" 2>/dev/null || true
   rm -f "$SIM_STATS_FILE" 2>/dev/null || true
-  # Reap tracked jobs so implicit wait on shell exit does not see Killed/OOM status.
-  for pid in "${PIDS[@]}"; do
-    wait "$pid" 2>/dev/null || true
-  done
-  wait 2>/dev/null || true
   echo "✅ Cleanup done"
 }
 
@@ -217,7 +201,7 @@ for port in $TEST_ACTUATOR_UDP_PORT $TEST_STARTUP_LISTEN_PORT $TEST_DAQ_UDP_PORT
 done
 sleep 0.3
 
-for port in $TEST_ELODIN_PORT $TEST_BACKEND_WS_PORT $TEST_BACKEND_API_PORT $TEST_SEQUENCER_PORT; do
+for port in $TEST_ELODIN_PORT $TEST_BACKEND_WS_PORT $TEST_BACKEND_API_PORT; do
   kill_port "$port" tcp
 done
 # FSWConfigManager in daq_bridge binds to UDP 5008 (hardcoded); kill stale holders
@@ -227,13 +211,13 @@ sleep 0.5
 # ── Build C++ binaries ───────────────────────────────────────────────────────
 
 echo "🔨 Building C++ binaries..."
-FSW_BUILD_DIR="$REPO_ROOT/FSW/build"
+FSW_BUILD_DIR="$REPO_ROOT/build"
 if [ ! -d "$FSW_BUILD_DIR" ]; then
   mkdir -p "$FSW_BUILD_DIR"
-  (cd "$FSW_BUILD_DIR" && cmake ..)
+  (cd "$FSW_BUILD_DIR" && cmake "$REPO_ROOT")
 fi
 (cd "$FSW_BUILD_DIR" && make -j"$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)" \
-  daq_bridge sequencer_service heartbeat_service config_broadcast_service calibration_service controller_service 2>&1) \
+  fsw_daq_lib daq_bridge sequencer_service heartbeat_service config_broadcast_service calibration_service controller_service 2>&1) \
   || fail "C++ build failed"
 echo "  ✅ C++ binaries built"
 echo ""
@@ -249,16 +233,16 @@ ELODIN_DB_BIN=""
 [ -z "$ELODIN_DB_BIN" ] && fail "elodin-db not found in PATH or ~/.cargo/bin"
 echo "  ✅ elodin-db: $ELODIN_DB_BIN"
 
-# Find DAQ bridge (check both build layouts)
+# Find DAQ bridge
 DAQ_BRIDGE=""
-for path in "$REPO_ROOT/FSW/build/daq_bridge" "$REPO_ROOT/build/FSW/daq_bridge" "$REPO_ROOT/build/daq_bridge"; do
+for path in "$REPO_ROOT/build/FSW/daq_bridge" "$REPO_ROOT/build/daq_bridge"; do
   [ -x "$path" ] && DAQ_BRIDGE="$path" && break
 done
-[ -z "$DAQ_BRIDGE" ] && fail "daq_bridge not found. Build with: cd FSW/build && cmake .. && make daq_bridge"
+[ -z "$DAQ_BRIDGE" ] && fail "daq_bridge not found. Build with: cd build && cmake .. && make daq_bridge"
 echo "  ✅ daq_bridge: $DAQ_BRIDGE"
 
 CONFIG_BROADCAST_SVC=""
-for path in "$REPO_ROOT/FSW/build/config_broadcast_service" "$REPO_ROOT/build/FSW/config_broadcast_service" "$REPO_ROOT/build/config_broadcast_service"; do
+for path in "$REPO_ROOT/build/FSW/config_broadcast_service" "$REPO_ROOT/build/config_broadcast_service"; do
   [ -x "$path" ] && CONFIG_BROADCAST_SVC="$path" && break
 done
 if [ -n "$CONFIG_BROADCAST_SVC" ]; then
@@ -268,7 +252,7 @@ else
 fi
 
 HEARTBEAT_SVC=""
-for path in "$REPO_ROOT/FSW/build/heartbeat_service" "$REPO_ROOT/build/FSW/heartbeat_service" "$REPO_ROOT/build/heartbeat_service"; do
+for path in "$REPO_ROOT/build/FSW/heartbeat_service" "$REPO_ROOT/build/heartbeat_service"; do
   [ -x "$path" ] && HEARTBEAT_SVC="$path" && break
 done
 if [ -n "$HEARTBEAT_SVC" ]; then
@@ -279,19 +263,19 @@ fi
 
 # Find sequencer_service (optional — command tests skipped if absent)
 SEQ_SVC=""
-for path in "$REPO_ROOT/FSW/build/sequencer_service" "$REPO_ROOT/build/FSW/sequencer_service" "$REPO_ROOT/build/sequencer_service"; do
+for path in "$REPO_ROOT/build/FSW/sequencer_service" "$REPO_ROOT/build/sequencer_service"; do
   [ -x "$path" ] && SEQ_SVC="$path" && break
 done
 if [ -n "$SEQ_SVC" ]; then
   echo "  ✅ sequencer_service: $SEQ_SVC"
 else
   echo "  ⚠️  sequencer_service not found — state/actuator tests will be skipped"
-  echo "       Build with: cd FSW/build && cmake .. && make sequencer_service"
+  echo "       Build with: cd build && cmake .. && make sequencer_service"
 fi
 
 # Find controller_service (optional — controller tests skipped if absent)
 CONTROLLER_SVC=""
-for path in "$REPO_ROOT/FSW/build/controller_service" "$REPO_ROOT/build/FSW/controller_service" "$REPO_ROOT/build/controller_service"; do
+for path in "$REPO_ROOT/build/FSW/controller_service" "$REPO_ROOT/build/controller_service"; do
   [ -x "$path" ] && CONTROLLER_SVC="$path" && break
 done
 if [ -n "$CONTROLLER_SVC" ]; then
@@ -302,7 +286,7 @@ fi
 
 # Find fake packet generator or board simulator (fallback)
 FAKE_GEN=""
-for path in "$REPO_ROOT/FSW/build/fake_packet_generator" "$REPO_ROOT/build/FSW/fake_packet_generator" "$REPO_ROOT/build/daq_comms/fake_packet_generator" "$REPO_ROOT/build/fake_packet_generator"; do
+for path in "$REPO_ROOT/build/FSW/fake_packet_generator" "$REPO_ROOT/build/daq_comms/fake_packet_generator" "$REPO_ROOT/build/fake_packet_generator"; do
   [ -x "$path" ] && FAKE_GEN="$path" && break
 done
 BOARD_SIM="$REPO_ROOT/scripts/board_simulator.py"
@@ -443,12 +427,12 @@ wait_for_port "$TEST_ELODIN_PORT" "Elodin DB" 10 || {
 echo "  ✅ Elodin DB started (PID ${PIDS[-1]})"
 
 # ── Start sequencer_service ──────────────────────────────────────────────────
-# Provides TCP command endpoint on TEST_SEQUENCER_PORT. Both thin and legacy backends forward
+# Provides TCP command endpoint on :9998. Both thin and legacy backends forward
 # state/actuator commands here. Reads Elodin port from the test config.
 
 if [ -n "$SEQ_SVC" ]; then
   echo "⚙️  Starting sequencer_service..."
-  "$SEQ_SVC" --config "$TEST_CONFIG" --port "$TEST_SEQUENCER_PORT" > "$REPO_ROOT/.tmp/integration_sequencer_$$.log" 2>&1 &
+  "$SEQ_SVC" --config "$TEST_CONFIG" --port 9998 > "$REPO_ROOT/.tmp/integration_sequencer_$$.log" 2>&1 &
   PIDS+=($!)
   sleep 1
   if kill -0 "${PIDS[-1]}" 2>/dev/null; then
@@ -520,7 +504,7 @@ if [ "$BACKEND" = "thin" ]; then
     WS_PORT=$TEST_BACKEND_WS_PORT \
     ELODIN_HOST=127.0.0.1 \
     ELODIN_PORT=$TEST_ELODIN_PORT \
-    ACTUATOR_SERVICE_PORT=$TEST_SEQUENCER_PORT \
+    ACTUATOR_SERVICE_PORT=9998 \
     CONFIG_PATH="$TEST_CONFIG" \
     npx tsx src/server.ts > "$REPO_ROOT/.tmp/integration_backend_$$.log" 2>&1) &
 else
@@ -532,7 +516,7 @@ else
     ELODIN_PORT=$TEST_ELODIN_PORT \
     ELODIN_RELAY_WS_URL="ws://127.0.0.1:$TEST_RELAY_WS_PORT" \
     ACTUATOR_SERVICE_ENABLED=false \
-    ACTUATOR_SERVICE_PORT=$TEST_SEQUENCER_PORT \
+    ACTUATOR_SERVICE_PORT=9998 \
     USE_CALIBRATION_SERVICE_CALIBRATED=false \
     USE_DIRECT_DAQ=false \
     USE_CPP_CONTROLLER=true \
@@ -551,7 +535,7 @@ echo "  ✅ Backend started (PID ${PIDS[-1]})"
 # ── Start Calibration Service ────────────────────────────────────────────────
 
 CALIB_SVC=""
-for path in "$REPO_ROOT/FSW/build/calibration_service" "$REPO_ROOT/build/FSW/calibration_service" "$REPO_ROOT/build/calibration_service"; do
+for path in "$REPO_ROOT/build/FSW/calibration_service" "$REPO_ROOT/build/calibration_service"; do
   [ -x "$path" ] && CALIB_SVC="$path" && break
 done
 if [ -n "$CALIB_SVC" ]; then
@@ -595,14 +579,14 @@ SIM_PID=""
 if [ -n "$FAKE_GEN" ]; then
   # fake_packet_generator: positional args = host port rate_hz
   "$FAKE_GEN" "127.0.0.1" "$TEST_DAQ_UDP_PORT" 10 > "$REPO_ROOT/.tmp/integration_fakegen_$$.log" 2>&1 &
-  PIDS+=("$!")
+  PIDS+=($!)
 else
   # board_simulator.py: uses --config for board definitions, --port for UDP target
   # --low-noise: constant ADC values per channel for calibration spike detection
   "$PYTHON_BIN" -c "import tomli" 2>/dev/null || "$PYTHON_BIN" -m pip install tomli -q 2>/dev/null || true
   "$PYTHON_BIN" "$BOARD_SIM" --config "$TEST_CONFIG" --target 127.0.0.1 --port "$TEST_DAQ_UDP_PORT" --low-noise --skip-startup --stats-file "$SIM_STATS_FILE" > "$REPO_ROOT/.tmp/integration_fakegen_$$.log" 2>&1 &
   SIM_PID=$!
-  PIDS+=("$SIM_PID")
+  PIDS+=($SIM_PID)
 fi
 sleep 2
 
@@ -621,7 +605,7 @@ echo "📥 Starting UDP listener for actuator commands..."
   NODE_PATH="$REPO_ROOT/web-gui/backend/node_modules" \
   npx tsx "$SCRIPT_DIR/udp_listener.ts" "$TEST_ACTUATOR_UDP_PORT" "$UDP_COMMANDS_FILE" 120 > "$REPO_ROOT/.tmp/integration_udp_$$.log" 2>&1) &
 UDP_PID=$!
-PIDS+=("$UDP_PID")
+PIDS+=($UDP_PID)
 sleep 1
 echo "  ✅ UDP listener started (PID $UDP_PID)"
 

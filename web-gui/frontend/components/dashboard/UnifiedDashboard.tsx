@@ -74,8 +74,6 @@ export default function UnifiedDashboard() {
   }, [loadActuatorsFromConfig, loadPressureSensors]);
 
   useEffect(() => {
-    ws.connect();
-
     const u6 = ws.on(MessageType.CONFIG_UPDATED, () => {
       loadActuatorsFromConfig();
       loadPressureSensors();

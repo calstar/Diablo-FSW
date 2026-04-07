@@ -142,6 +142,7 @@ export interface CommandPayload {
 export interface ConnectionStatus {
   connected: boolean;
   elodinConnected: boolean;
+  connId?: string;
   latency?: number;
   error?: string;
 }

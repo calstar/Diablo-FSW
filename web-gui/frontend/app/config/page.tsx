@@ -112,7 +112,6 @@ export default function ConfigPage() {
   const { controlEnabled } = useControlMode();
 
   useEffect(() => {
-    ws.connect();
     loadConfig();
 
     const unsubConn = ws.on(MessageType.CONNECTION_STATUS, () => {});

@@ -23,49 +23,86 @@ const STALE_CONNECTION_MS = (() => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 })();
 const STALE_CHECK_INTERVAL_MS = 30 * 1000; // check every 30s
+const WS_CLIENT_VERSION = 2;
 
 export class WebSocketClient {
+  public readonly _version = WS_CLIENT_VERSION;
   private ws: WebSocket | null = null;
-  private url: string;
+  private fallbackUrls: string[];
+  private urlIndex = 0;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private staleCheckTimer: ReturnType<typeof setInterval> | null = null;
   private lastMessageTime = 0;
   private listeners: Map<string, Set<(payload: unknown) => void>> = new Map();
   private connectionStatusListeners: Set<(status: ConnectionStatus) => void> = new Set();
+  private currentConnectionStatus: ConnectionStatus = { connected: false, elodinConnected: false };
   private messageQueue: WSMessage[] = []; // Queue messages until WebSocket is ready
   private static readonly MESSAGE_QUEUE_MAX = 50; // Prevent unbounded growth during disconnect
+  private attemptCounter = 0;
+  private socketCounter = 0;
+  private activeAttemptId: string | null = null;
+  private activeSocketId: string | null = null;
+  private connectStartMs = 0;
+  private lastCloseCode: number | null = null;
+  private lastCloseReason = '';
 
-  constructor(url: string = 'ws://localhost:8081') {
-    this.url = url;
+  constructor(urls: string[] = ['ws://localhost:8081']) {
+    this.fallbackUrls = urls.length > 0 ? Array.from(new Set(urls)) : ['ws://localhost:8081'];
   }
 
-  connect(): void {
+  connect(caller = 'unknown'): void {
+    const readyState = this.ws?.readyState ?? null;
+    this.log('connect_called', {
+      caller,
+      wsReadyState: readyState,
+      hasReconnectTimer: !!this.reconnectTimer,
+      urlIndex: this.urlIndex,
+      queueLen: this.messageQueue.length,
+    });
     if (this.ws?.readyState === WebSocket.OPEN) {
-      // Idempotent connect: many components call ws.connect() on mount.
-      // Never tear down a healthy socket from a repeated connect request.
-      console.log('✅ WebSocket already connected');
+      this.log('connect_skipped', { caller, reason: 'already_open' });
       return;
     }
     if (this.ws?.readyState === WebSocket.CONNECTING) {
-      // Another caller already initiated connection; let it complete.
+      // Multiple components call connect() on mount; do not flap the socket.
+      this.log('connect_skipped', { caller, reason: 'already_connecting' });
       return;
     }
 
-    // If a previous socket is CLOSING/CLOSED, discard reference and create a new one.
-    if (this.ws && (this.ws.readyState === WebSocket.CLOSING || this.ws.readyState === WebSocket.CLOSED)) {
-      this.ws = null;
+    // Close existing connection if any
+    if (this.ws) {
+      this.log('socket_replaced', { caller, previousReadyState: this.ws.readyState });
+      this.ws.close();
     }
 
     try {
-      console.log(`🔌 Connecting to WebSocket: ${this.url}`);
-      this.ws = new WebSocket(this.url);
+      const url = this.fallbackUrls[this.urlIndex] ?? this.fallbackUrls[0];
+      this.connectStartMs = Date.now();
+      this.activeAttemptId = `a${++this.attemptCounter}`;
+      this.activeSocketId = `s${++this.socketCounter}`;
+      this.log('socket_create', {
+        caller,
+        url,
+        attemptId: this.activeAttemptId,
+        socketId: this.activeSocketId,
+        fallbackCount: this.fallbackUrls.length,
+      });
+      const socket = new WebSocket(url);
+      this.ws = socket;
 
-      this.ws.onopen = () => {
+      socket.onopen = () => {
+        if (this.ws !== socket) return;
         this.lastMessageTime = Date.now();
         this.startStaleCheck();
-        console.log('✅ WebSocket connected to backend');
-        console.log(`   WebSocket URL: ${this.url}`);
-        console.log(`   Ready state: ${this.ws?.readyState} (1=OPEN)`);
+        this.log('open', {
+          url,
+          attemptId: this.activeAttemptId,
+          socketId: this.activeSocketId,
+          queuedBeforeFlush: this.messageQueue.length,
+          listenerTypeCount: this.listeners.size,
+          connStatusListenerCount: this.connectionStatusListeners.size,
+          msSinceConnectCall: Math.max(0, Date.now() - this.connectStartMs),
+        });
         this.notifyConnectionStatus({ connected: true, elodinConnected: false });
 
         // Flush queued messages
@@ -91,7 +128,8 @@ export class WebSocketClient {
         });
       };
 
-      this.ws.onmessage = (event) => {
+      socket.onmessage = (event) => {
+        if (this.ws !== socket) return;
         this.lastMessageTime = Date.now();
         try {
           const message: WSMessage = JSON.parse(event.data);
@@ -101,26 +139,44 @@ export class WebSocketClient {
         }
       };
 
-      this.ws.onerror = (error) => {
-        console.error('❌ WebSocket error:', error);
-        console.error(`   URL: ${this.url}`);
-        console.error(`   Ready state: ${this.ws?.readyState} (0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)`);
-        console.error(`   Check: Is backend WebSocket server running on port 8081?`);
+      socket.onerror = (error) => {
+        if (this.ws !== socket) return;
+        this.log('error', {
+          url,
+          attemptId: this.activeAttemptId,
+          socketId: this.activeSocketId,
+          readyState: this.ws?.readyState ?? null,
+          message: error instanceof Event ? 'event' : String(error),
+        });
         this.notifyConnectionStatus({ connected: false, elodinConnected: false });
       };
 
-      this.ws.onclose = (event) => {
+      socket.onclose = (event) => {
+        if (this.ws !== socket) return;
         this.stopStaleCheck();
-        console.log(`🔌 WebSocket disconnected (code: ${event.code}, reason: ${event.reason || 'none'})`);
-        console.log(`   Ready state: ${this.ws?.readyState} (3=CLOSED)`);
-        if (event.code !== 1000) {
-          console.error(`   Abnormal close - check backend logs`);
+        this.lastCloseCode = event.code;
+        this.lastCloseReason = event.reason || '';
+        this.log('close', {
+          attemptId: this.activeAttemptId,
+          socketId: this.activeSocketId,
+          code: event.code,
+          reason: event.reason || '',
+          wasClean: event.wasClean,
+          readyState: this.ws?.readyState ?? null,
+          willScheduleReconnect: true,
+          reconnectTimerActive: !!this.reconnectTimer,
+          pageVisibility: typeof document !== 'undefined' ? document.visibilityState : 'unknown',
+        });
+        if (this.fallbackUrls.length > 1) {
+          this.urlIndex = (this.urlIndex + 1) % this.fallbackUrls.length;
+          const nextUrl = this.fallbackUrls[this.urlIndex];
+          this.log('fallback_advance', { nextUrl, urlIndex: this.urlIndex });
         }
         this.notifyConnectionStatus({ connected: false, elodinConnected: false });
         this.scheduleReconnect();
       };
     } catch (error) {
-      console.error('❌ Failed to create WebSocket:', error);
+      this.log('create_failed', { message: String(error) });
       this.scheduleReconnect();
     }
   }
@@ -186,7 +242,13 @@ export class WebSocketClient {
       });
     }
     if (message.type === MessageType.CONNECTION_STATUS) {
-      this.notifyConnectionStatus(message.payload as ConnectionStatus);
+      const status = message.payload as ConnectionStatus;
+      this.log('connection_status_message', {
+        connected: status.connected,
+        elodinConnected: status.elodinConnected,
+        connId: status.connId ?? null,
+      });
+      this.notifyConnectionStatus(status);
     }
   }
 
@@ -196,6 +258,11 @@ export class WebSocketClient {
       this.listeners.set(typeStr, new Set());
     }
     this.listeners.get(typeStr)!.add(callback);
+    this.log('listener_added', {
+      type: typeStr,
+      countForType: this.listeners.get(typeStr)?.size ?? 0,
+      connected: this.isConnected(),
+    });
 
     // Return unsubscribe function
     return () => {
@@ -208,12 +275,20 @@ export class WebSocketClient {
 
   onConnectionStatus(callback: (status: ConnectionStatus) => void): () => void {
     this.connectionStatusListeners.add(callback);
+    this.log('connection_status_listener_added', {
+      count: this.connectionStatusListeners.size,
+      connected: this.currentConnectionStatus.connected,
+      elodinConnected: this.currentConnectionStatus.elodinConnected,
+    });
+    // Replay latest status so late subscribers don't get stuck "Disconnected".
+    callback(this.currentConnectionStatus);
     return () => {
       this.connectionStatusListeners.delete(callback);
     };
   }
 
   private notifyConnectionStatus(status: ConnectionStatus): void {
+    this.currentConnectionStatus = status;
     this.connectionStatusListeners.forEach((listener) => listener(status));
   }
 
@@ -279,17 +354,33 @@ export class WebSocketClient {
 
   private scheduleReconnect(): void {
     if (this.reconnectTimer) {
+      this.log('reconnect_skip', { reason: 'timer_exists' });
       return;
     }
+    this.log('reconnect_scheduled', {
+      delayMs: 3000,
+      attemptId: this.activeAttemptId,
+      socketId: this.activeSocketId,
+      closeCode: this.lastCloseCode,
+      closeReason: this.lastCloseReason,
+    });
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
-      console.log('🔄 Attempting to reconnect...');
-      this.connect();
+      this.log('reconnect_fired', {
+        attemptId: this.activeAttemptId,
+        socketId: this.activeSocketId,
+      });
+      this.connect('reconnect_timer');
     }, 3000);
   }
 
   disconnect(): void {
+    this.log('disconnect_called', {
+      hasReconnectTimer: !!this.reconnectTimer,
+      hasSocket: !!this.ws,
+      readyState: this.ws?.readyState ?? null,
+    });
     this.stopStaleCheck();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
@@ -305,14 +396,17 @@ export class WebSocketClient {
   isConnected(): boolean {
     return this.ws?.readyState === WebSocket.OPEN;
   }
+
+  private log(event: string, fields: Record<string, unknown>): void {
+    console.log(`[WS] ${JSON.stringify({ event, ts: Date.now(), ...fields })}`);
+  }
 }
 
-// Singleton instance
-// In Next.js dev, HMR can re-evaluate modules and reset module-scoped variables.
-// Storing the singleton on `globalThis` keeps the connection stable across hot reloads.
-const wsClientGlobal = globalThis as unknown as {
-  __sensorSystemWsClient?: WebSocketClient;
-};
+declare global {
+  // Keep singleton stable across Next dev/HMR module reloads.
+  // eslint-disable-next-line no-var
+  var __DIABLO_WS_CLIENT__: WebSocketClient | undefined;
+}
 
 export function getApiBaseUrl(): string {
   if (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_URL) {
@@ -340,49 +434,49 @@ export function getApiBaseUrl(): string {
   return 'http://localhost:8081';
 }
 
-// Auto-detect WebSocket URL based on current hostname
-function getWebSocketUrl(): string {
-  // Use environment variable if set
-  if (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_WS_URL) {
-    const envUrl = process.env.NEXT_PUBLIC_WS_URL;
-    // Guard against localhost trap when client is remote (tablet/laptop on network).
-    if (typeof window !== 'undefined') {
-      try {
-        const parsed = new URL(envUrl);
-        const isLocalEnv = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
-        const isRemoteClient = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-        if (isLocalEnv && isRemoteClient) {
-          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-          return `${protocol}//${window.location.hostname}:8081`;
-        }
-      } catch {
-        // Fall through to existing behavior.
-      }
+export function getWebSocketClient(): WebSocketClient {
+  const existing = globalThis.__DIABLO_WS_CLIENT__;
+  const isStale = !!existing && (existing as any)._version !== WS_CLIENT_VERSION;
+  if (isStale) {
+    try {
+      existing?.disconnect();
+    } catch {
+      // ignore stale instance disconnect errors
     }
-    return envUrl;
+    globalThis.__DIABLO_WS_CLIENT__ = undefined;
+    console.log(`[WS] ${JSON.stringify({ event: 'singleton_replaced_stale', ts: Date.now() })}`);
   }
 
-  // Auto-detect from current hostname (for network access)
-  // Only works in browser, not during SSR
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // Always use port 8081 for WebSocket backend
-    const port = ':8081';
-    const url = `${protocol}//${hostname}${port}`;
-    console.log(`🔗 WebSocket URL determined: ${url}`);
-    return url;
+  if (!globalThis.__DIABLO_WS_CLIENT__) {
+    const urls = getWebSocketFallbackUrls();
+    console.log(`🔧 Creating WebSocket client singleton with URLs: ${urls.join(', ')}`);
+    globalThis.__DIABLO_WS_CLIENT__ = new WebSocketClient(urls);
+  } else {
+    console.log('[WS] {"event":"singleton_reused","ts":' + Date.now() + '}');
   }
-
-  // Fallback for server-side rendering (will be replaced when client-side code runs)
-  return 'ws://localhost:8081';
+  return globalThis.__DIABLO_WS_CLIENT__;
 }
 
-export function getWebSocketClient(): WebSocketClient {
-  if (!wsClientGlobal.__sensorSystemWsClient) {
-    const url = getWebSocketUrl();
-    console.log(`🔧 Creating WebSocket client singleton with URL: ${url}`);
-    wsClientGlobal.__sensorSystemWsClient = new WebSocketClient(url);
+function getWebSocketFallbackUrls(): string[] {
+  const urls: string[] = [];
+  const add = (u: string) => {
+    if (!u) return;
+    if (!urls.includes(u)) urls.push(u);
+  };
+
+  if (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_WS_URL) {
+    add(process.env.NEXT_PUBLIC_WS_URL);
   }
-  return wsClientGlobal.__sensorSystemWsClient;
+
+  if (typeof window !== 'undefined') {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    let hostname = window.location.hostname;
+    if (hostname === '0.0.0.0' || hostname === '') hostname = 'localhost';
+    add(`${protocol}//${hostname}:8081`);
+    add(`${protocol}//localhost:8081`);
+    add(`${protocol}//127.0.0.1:8081`);
+  }
+
+  if (urls.length === 0) add('ws://localhost:8081');
+  return urls;
 }

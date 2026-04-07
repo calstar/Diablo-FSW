@@ -101,7 +101,6 @@ export default function TimeSeriesPlot({
     }
 
     const ws  = getWebSocketClient();
-    ws.connect();
     const unsubStatus = ws.onConnectionStatus((s) => updateConnectionStatus(s));
 
     const seriesLabels = entities.map((e, i) => labels?.[i] ?? e.split('.').pop() ?? e);

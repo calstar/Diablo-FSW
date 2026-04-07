@@ -216,7 +216,6 @@ export default function CalibrationPage() {
   }, []);
 
   useEffect(() => {
-    ws.connect();
     const u2 = ws.on(MessageType.CALIBRATION_STATUS, (p: unknown) => {
       const payload = p as CalibrationStatusPayload;
       setCalStatus(payload);

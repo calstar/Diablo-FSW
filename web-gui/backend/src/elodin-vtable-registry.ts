@@ -191,10 +191,11 @@ export async function registerVTables(client: ElodinClient): Promise<boolean> {
         const vtableStreamMsgId = computeMsgId('VTableStream');
         console.log(`   VTableStream msg_id: [0x${vtableStreamMsgId[0].toString(16).padStart(2, '0')}, 0x${vtableStreamMsgId[1].toString(16).padStart(2, '0')}]`);
 
-        // Clear ALL subscriptions on each retry cycle — Elodin silently drops VTableStream
-        // requests for VTables that aren't registered yet (daq_bridge/calibration_service may
-        // register theirs after the backend's first subscribe). Re-sending is idempotent.
-        subscribedVTableStreamPairs.clear();
+        // Do NOT clear subscribedVTableStreamPairs here — calling registerVTables every 5s
+        // (via scheduleResubscribe) would otherwise re-send all 276 subscriptions, causing
+        // Elodin to replay all stored data on every retry and flooding the event loop.
+        // Subscriptions are only cleared on disconnect (clearSubscriptionState), so each
+        // retry only sends subscriptions not yet successfully sent this connection.
 
         let successCount = 0;
         let skippedCount = 0;

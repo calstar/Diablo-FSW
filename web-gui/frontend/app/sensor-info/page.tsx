@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react';
-import { useSensorStore, useSensorValue } from '@/lib/store';
+import { useSensorStore, useSensorValue, ALIASES } from '@/lib/store';
 import { getWebSocketClient, getApiBaseUrl } from '@/lib/websocket';
 import { MessageType, SensorUpdate, StateUpdate } from '@/lib/types';
 import { useSensorRate, getSensorRate } from '@/lib/sensor-rate';
@@ -44,6 +44,33 @@ function fmtHz(v: number): string {
   return v.toFixed(1);
 }
 
+function getAliasedSensorRate(entity: string, component: string): number {
+  const key = `${entity}.${component}`;
+  let best = getSensorRate(entity, component);
+  const fallbacks = ALIASES[key];
+  if (fallbacks) {
+    for (const fb of fallbacks) {
+      const i = fb.lastIndexOf('.');
+      if (i <= 0) continue;
+      const fbEntity = fb.slice(0, i);
+      const fbComponent = fb.slice(i + 1);
+      best = Math.max(best, getSensorRate(fbEntity, fbComponent));
+    }
+  }
+  return best;
+}
+
+function useAliasedSensorRate(entity: string, component: string, intervalMs = 500): number {
+  const [rate, setRate] = useState(0);
+  useEffect(() => {
+    const compute = () => setRate(getAliasedSensorRate(entity, component));
+    compute();
+    const id = setInterval(compute, intervalMs);
+    return () => clearInterval(id);
+  }, [entity, component, intervalMs]);
+  return rate;
+}
+
 function fmtMa(v: number | null): string {
   if (v === null || !isFinite(v)) return '---';
   return v.toFixed(2);
@@ -76,7 +103,7 @@ function useBoardRate(
     let cancelled = false;
 
     const compute = () => {
-      const total = keys.reduce((sum, k) => sum + getSensorRate(k.entity, k.component), 0);
+      const total = keys.reduce((sum, k) => sum + getAliasedSensorRate(k.entity, k.component), 0);
       if (!cancelled) setRate(total);
     };
 
@@ -134,8 +161,8 @@ function SensorTable({
 function PtRow({ sensor }: { sensor: PtSensor }) {
   const adc     = useSensorValue(sensor.rawEntity, 'raw_adc_counts');
   const psi     = useSensorValue(sensor.calEntity, 'pressure_psi');
-  const rateAdc = useSensorRate(sensor.rawEntity, 'raw_adc_counts');
-  const ratePsi = useSensorRate(sensor.calEntity, 'pressure_psi');
+  const rateAdc = useAliasedSensorRate(sensor.rawEntity, 'raw_adc_counts');
+  const ratePsi = useAliasedSensorRate(sensor.calEntity, 'pressure_psi');
   const rate    = Math.max(rateAdc, ratePsi);
 
   return (
@@ -167,9 +194,8 @@ function PtRow({ sensor }: { sensor: PtSensor }) {
 function HptRow({ sensor }: { sensor: PtSensor }) {
   const adc      = useSensorValue(sensor.rawEntity, 'raw_adc_counts');
   const psi      = useSensorValue(sensor.calEntity, 'pressure_psi');
-  const ma       = useSensorValue(sensor.calEntity, 'current_ma');
-  const rateAdc  = useSensorRate(sensor.rawEntity, 'raw_adc_counts');
-  const ratePsi  = useSensorRate(sensor.calEntity, 'pressure_psi');
+  const rateAdc  = useAliasedSensorRate(sensor.rawEntity, 'raw_adc_counts');
+  const ratePsi  = useAliasedSensorRate(sensor.calEntity, 'pressure_psi');
   const rate     = Math.max(rateAdc, ratePsi);
 
   return (
@@ -191,9 +217,6 @@ function HptRow({ sensor }: { sensor: PtSensor }) {
       <td className="px-4 py-2 tabular-nums" style={{ color: sensor.color }}>
         {fmtPsi(psi)} <span className="text-gray-600 text-xs">PSI</span>
       </td>
-      <td className="px-4 py-2 tabular-nums text-blue-400">
-        {fmtMa(ma)} <span className="text-gray-600 text-xs">mA</span>
-      </td>
       <td className="px-4 py-2 tabular-nums text-cyan-400">{fmtHz(rate)} <span className="text-gray-600 text-xs">Hz</span></td>
     </tr>
   );
@@ -205,8 +228,8 @@ function TcRow({ entity, label, color }: { entity: string; label: string; color:
   const raw  = useSensorValue(entity, 'raw_adc_counts');
   const calEntity = entity.replace('TC.', 'TC_Cal.');
   const tempC = useSensorValue(calEntity, 'temperature_c');
-  const rateRaw = useSensorRate(entity, 'raw_adc_counts');
-  const rateCal = useSensorRate(calEntity, 'temperature_c');
+  const rateRaw = useAliasedSensorRate(entity, 'raw_adc_counts');
+  const rateCal = useAliasedSensorRate(calEntity, 'temperature_c');
   const rate = Math.max(rateRaw, rateCal);
 
   return (
@@ -231,8 +254,8 @@ function TcRow({ entity, label, color }: { entity: string; label: string; color:
 function RtdRow({ entity, calEntity, label, color }: { entity: string; calEntity: string; label: string; color: string }) {
   const rawRes  = useSensorValue(entity, 'raw_resistance_counts');
   const tempC   = useSensorValue(calEntity, 'temperature_c');
-  const rateRaw = useSensorRate(entity, 'raw_resistance_counts');
-  const rateCal = useSensorRate(calEntity, 'temperature_c');
+  const rateRaw = useAliasedSensorRate(entity, 'raw_resistance_counts');
+  const rateCal = useAliasedSensorRate(calEntity, 'temperature_c');
   const rate    = Math.max(rateRaw, rateCal);
 
   return (
@@ -260,8 +283,8 @@ function LcRow({ entity, label, color }: { entity: string; label: string; color:
   const raw  = useSensorValue(entity, 'raw_adc_counts');
   const calEntity = entity.replace('LC.', 'LC_Cal.');
   const forceKg = useSensorValue(calEntity, 'force_kg');
-  const rateRaw = useSensorRate(entity, 'raw_adc_counts');
-  const rateCal = useSensorRate(calEntity, 'force_kg');
+  const rateRaw = useAliasedSensorRate(entity, 'raw_adc_counts');
+  const rateCal = useAliasedSensorRate(calEntity, 'force_kg');
   const rate = Math.max(rateRaw, rateCal);
 
   return (
@@ -283,12 +306,11 @@ function LcRow({ entity, label, color }: { entity: string; label: string; color:
 
 // ── ACT row ──────────────────────────────────────────────────────────────
 
-function ActRow({ entity, label, color }: { entity: string; label: string; color: string }) {
+function ActRow({ entity, calEntity, label, color }: { entity: string; calEntity: string; label: string; color: string }) {
   const raw  = useSensorValue(entity, 'raw_adc_counts');
-  const calEntity = entity.replace('ACT.', 'ACT_Cal.');
   const currentA = useSensorValue(calEntity, 'current_a');
-  const rateRaw = useSensorRate(entity, 'raw_adc_counts');
-  const rateCal = useSensorRate(calEntity, 'current_a');
+  const rateRaw = useAliasedSensorRate(entity, 'raw_adc_counts');
+  const rateCal = useAliasedSensorRate(calEntity, 'current_a');
   const rate = Math.max(rateRaw, rateCal);
 
   return (
@@ -340,6 +362,27 @@ function buildTcChannelsWithRef(boards: Record<string, any>): { entity: string; 
   return out;
 }
 
+function buildActChannels(boards: Record<string, any>): { entity: string; calEntity: string; label: string }[] {
+  const out: { entity: string; calEntity: string; label: string }[] = [];
+  for (const board of Object.values(boards)) {
+    if (board.type !== 'ACTUATOR' || board.enabled === false) continue;
+    const boardId = typeof board.board_id === 'number' ? board.board_id : 11;
+    const boardNumber = boardId % 10;
+    const active: number[] =
+      Array.isArray(board.active_connectors) && board.active_connectors.length > 0
+        ? (board.active_connectors as number[])
+        : Array.from({ length: (board.num_sensors as number) ?? 10 }, (_, i) => i + 1);
+    for (const ch of active) {
+      out.push({
+        entity: `ACT${boardNumber}.CH${ch}`,
+        calEntity: `ACT${boardNumber}_Cal.CH${ch}`,
+        label: `B${boardId} Ch${ch}`,
+      });
+    }
+  }
+  return out;
+}
+
 const SENSE_COLORS = ['#F59E0B', '#10B981', '#3B82F6', '#EC4899', '#F87171', '#A78BFA', '#34D399', '#FBBF24', '#60A5FA', '#E879F9'];
 
 // Default channel lists match config.toml active_connectors so the first
@@ -348,7 +391,11 @@ const SENSE_COLORS = ['#F59E0B', '#10B981', '#3B82F6', '#EC4899', '#F87171', '#A
 const TC_DEFAULT_CHANNELS  = [2, 3, 4, 5];   // tc_board  active_connectors
 const RTD_DEFAULT_CHANNELS = [1, 2, 3, 4];   // rtd_board active_connectors
 const LC_DEFAULT_CHANNELS  = [1, 2, 3];      // lc_board  active_connectors
-const ACT_DEFAULT_CHANNELS = Array.from({ length: 20 }, (_, i) => i + 1);  // actuator boards 12+14
+const ACT_DEFAULT_DATA = Array.from({ length: 10 }, (_, i) => ({
+  entity: `ACT2.CH${i + 1}`,
+  calEntity: `ACT2_Cal.CH${i + 1}`,
+  label: `B12 Ch${i + 1}`,
+}));
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
@@ -405,7 +452,7 @@ export default function SensorInfoPage() {
   );
   const [rtdChannels, setRtdChannels] = useState<number[]>(RTD_DEFAULT_CHANNELS);
   const [lcChannels, setLcChannels] = useState<number[]>(LC_DEFAULT_CHANNELS);
-  const [actChannels, setActChannels] = useState<number[]>(ACT_DEFAULT_CHANNELS);
+  const [actData, setActData] = useState<{ entity: string; calEntity: string; label: string }[]>(ACT_DEFAULT_DATA);
 
   const loadChannelConfig = useCallback(() => {
     fetch(`${getApiBaseUrl()}/api/config`)
@@ -424,8 +471,8 @@ export default function SensorInfoPage() {
         if (rtd.length) setRtdChannels(rtd);
         const lc = buildChannels(boards, 'LC');
         if (lc.length) setLcChannels(lc);
-        const act = buildChannels(boards, 'ACTUATOR');
-        if (act.length) setActChannels(act);
+        const act = buildActChannels(boards);
+        if (act.length) setActData(act);
       })
       .catch(() => {/* keep defaults on failure */});
   }, []);
@@ -490,7 +537,7 @@ export default function SensorInfoPage() {
   const tcKeys = tcData.map((d) => ({ entity: d.entity, component: 'raw_adc_counts' }));
   const rtdKeys = rtdChannels.map((ch) => ({ entity: `RTD.CH${ch}`, component: 'raw_resistance_counts' }));
   const lcKeys = lcChannels.map((ch) => ({ entity: `LC.CH${ch}`, component: 'raw_adc_counts' }));
-  const actKeys = actChannels.map((ch) => ({ entity: `ACT.CH${ch}`, component: 'raw_adc_counts' }));
+  const actKeys = actData.map((d) => ({ entity: d.entity, component: 'raw_adc_counts' }));
 
   const pt21Rate = useBoardRate(pt21Keys);
   const pt22Rate = useBoardRate(pt22Keys);
@@ -500,7 +547,6 @@ export default function SensorInfoPage() {
   const actRate = useBoardRate(actKeys);
 
   useEffect(() => {
-    ws.connect();
     const unsub = ws.on(MessageType.CONFIG_UPDATED, () => { loadChannelConfig(); loadPtSensors(); });
     return () => { unsub(); };
   }, [ws, loadChannelConfig, loadPtSensors]);
@@ -511,30 +557,30 @@ export default function SensorInfoPage() {
 
         <div className="flex items-center gap-3 mb-1">
           <h1 className="text-2xl font-bold tracking-widest text-gray-300 uppercase">Sensor Info</h1>
-          <span className="text-xs text-gray-500 font-mono">ADC · Converted · Rate = updates/sec per channel received by GUI</span>
+          <span className="text-xs text-gray-500 font-mono">ADC · Converted · Frontend Rate = updates/sec per channel received by this GUI client</span>
         </div>
 
         <div className="flex flex-wrap gap-3 mb-2">
           <div className="bg-card border border-gray-800 rounded-lg px-4 py-3 text-xs font-mono text-gray-300">
-            <div className="text-[10px] uppercase text-gray-500 tracking-widest mb-1">DAQ Stream (Elodin DB)</div>
+            <div className="text-[10px] uppercase text-gray-500 tracking-widest mb-1">Backend Ingest (from Elodin DB)</div>
             <div className="flex gap-6 items-baseline">
               <div>
                 <span className="text-gray-500 mr-1">Packets:</span>
                 <span className="text-cyan-400">{relayPackets != null ? relayPackets.toLocaleString() : '---'}</span>
               </div>
               <div>
-                <span className="text-gray-500 mr-1">Rate:</span>
+                <span className="text-gray-500 mr-1">Ingest Rate:</span>
                 <span className="text-cyan-400">{fmtHz(relayRateHz)} Hz</span>
               </div>
             </div>
             <div className="text-[10px] text-gray-600 mt-1">
-              Total packets/sec from Elodin DB seen by the backend (all sensor types combined).
+              Total packets/sec ingested by backend from Elodin DB (all sensor types combined; not per-channel frontend rate).
             </div>
           </div>
 
           <div className="bg-card border border-gray-800 rounded-lg px-4 py-3 text-[11px] font-mono text-gray-300 flex flex-col gap-1">
             <div className="text-[10px] uppercase text-gray-500 tracking-widest mb-1">
-              Board Total Rates (all channels summed)
+              Frontend Received Rates (all channels summed)
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-x-4 gap-y-1">
               <div>
@@ -569,7 +615,7 @@ export default function SensorInfoPage() {
         <SensorTable
           title="PT — Pressure Transducers"
           color="#E67E22"
-          headers={['Channel', 'ADC Code', 'Pressure', 'Rate']}
+          headers={['Channel', 'ADC Code', 'Pressure', 'Frontend Rate']}
         >
           {ptSensors.length === 0 ? (
             <tr><td colSpan={4} className="px-4 py-3 text-gray-600 text-xs">Loading PT roles…</td></tr>
@@ -582,10 +628,10 @@ export default function SensorInfoPage() {
         <SensorTable
           title="HPT — High-Pressure PT (4–20 mA)"
           color="#9B59B6"
-          headers={['Channel', 'ADC Code', 'Pressure', 'Current', 'Rate']}
+          headers={['Channel', 'ADC Code', 'Pressure', 'Frontend Rate']}
         >
           {hptSensors.length === 0 ? (
-            <tr><td colSpan={5} className="px-4 py-3 text-gray-600 text-xs">Loading HP PT roles…</td></tr>
+            <tr><td colSpan={4} className="px-4 py-3 text-gray-600 text-xs">Loading HP PT roles…</td></tr>
           ) : (
             hptSensors.map((s) => <HptRow key={s.calEntity} sensor={s} />)
           )}
@@ -595,7 +641,7 @@ export default function SensorInfoPage() {
         <SensorTable
           title="TC — Thermocouples, K-type (Board 51)"
           color="#F59E0B"
-          headers={['Channel', 'ADC Code', 'Temp (derived)', 'Rate']}
+          headers={['Channel', 'ADC Code', 'Temp (derived)', 'Frontend Rate']}
         >
           {tcData.map((d, i) => (
             <TcRow
@@ -612,7 +658,7 @@ export default function SensorInfoPage() {
         <SensorTable
           title="RTD — Pt1000 Temperature (Board 31)"
           color="#10B981"
-          headers={['Channel', 'ADC Code', 'Temp', 'Rate']}
+          headers={['Channel', 'ADC Code', 'Temp', 'Frontend Rate']}
         >
           {rtdChannels.map((ch, i) => (
             <RtdRow
@@ -629,7 +675,7 @@ export default function SensorInfoPage() {
         <SensorTable
           title="LC — Load Cells (Board 41)"
           color="#3B82F6"
-          headers={['Channel', 'ADC Code', 'Force (derived)', 'Rate']}
+          headers={['Channel', 'ADC Code', 'Force (derived)', 'Frontend Rate']}
         >
           {lcChannels.map((ch, i) => (
             <LcRow
@@ -645,13 +691,14 @@ export default function SensorInfoPage() {
         <SensorTable
           title="ACT — Actuator Current Sense (Boards 12, 14)"
           color="#EF4444"
-          headers={['Channel', 'ADC Code', 'Current', 'Rate']}
+          headers={['Channel', 'ADC Code', 'Current', 'Frontend Rate']}
         >
-          {actChannels.map((ch, i) => (
+          {actData.map((d, i) => (
             <ActRow
-              key={ch}
-              entity={`ACT.CH${ch}`}
-              label={`ACT Ch${ch}`}
+              key={d.entity}
+              entity={d.entity}
+              calEntity={d.calEntity}
+              label={d.label}
               color={SENSE_COLORS[i % SENSE_COLORS.length]}
             />
           ))}

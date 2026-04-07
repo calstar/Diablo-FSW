@@ -105,9 +105,6 @@ export default function ControllerPage() {
   }, [loadLcConfig]);
 
   useEffect(() => {
-    if (!ws.isConnected()) {
-      ws.connect();
-    }
     const unsub = ws.on(MessageType.CONFIG_UPDATED, loadLcConfig);
 
     ws.send({

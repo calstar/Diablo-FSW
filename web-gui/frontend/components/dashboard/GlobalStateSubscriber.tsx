@@ -28,8 +28,8 @@ export default function GlobalStateSubscriber() {
     const updateActuatorExpectedPositions = useSensorStore((state) => state.updateActuatorExpectedPositions);
 
     useEffect(() => {
+        console.log('[WS] GlobalStateSubscriber effect start');
         const ws = getWebSocketClient();
-        ws.connect();
 
         try {
             startDataCache(); // Initialize the background data cache properly
@@ -70,7 +70,12 @@ export default function GlobalStateSubscriber() {
             updateCountdownTargetTime(payload.targetTimeMs);
         });
 
+        // Register listeners before opening socket to avoid missing first status/data burst.
+        ws.connect('GlobalStateSubscriber');
+        console.log('[WS] GlobalStateSubscriber connect invoked');
+
         return () => {
+            console.log('[WS] GlobalStateSubscriber cleanup');
             u1(); u2(); u3(); u4(); u5(); u6(); u7(); u8(); u9();
         };
     }, [

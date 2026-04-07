@@ -260,8 +260,6 @@ SOURCE_DIRS=()
 [ -d "$REPO/FSW/include" ]     && SOURCE_DIRS+=("$REPO/FSW/include")
 [ -d "$REPO/daq_comms/src" ]   && SOURCE_DIRS+=("$REPO/daq_comms/src")
 [ -d "$REPO/daq_comms/include" ] && SOURCE_DIRS+=("$REPO/daq_comms/include")
-# Also check CMakeLists.txt in root, FSW/, daq_comms/
-CMAKE_FILES=("$REPO/CMakeLists.txt" "$REPO/FSW/CMakeLists.txt" "$REPO/daq_comms/CMakeLists.txt")
 
 for artifact in "${EXPECTED_BINS[@]}"; do
     full_path="$REPO/$artifact"
@@ -271,17 +269,14 @@ for artifact in "${EXPECTED_BINS[@]}"; do
         continue
     fi
 
-    # Count source files newer than this binary
+    # Count source files newer than this binary (.cpp/.h only — CMakeLists.txt
+    # changes are tracked by cmake/make automatically and don't indicate staleness)
     newer_count=0
     if [ "${#SOURCE_DIRS[@]}" -gt 0 ]; then
         newer_count=$(find "${SOURCE_DIRS[@]}" \
-            \( -name "*.cpp" -o -name "*.h" -o -name "CMakeLists.txt" \) \
+            \( -name "*.cpp" -o -name "*.h" \) \
             -newer "$full_path" 2>/dev/null | wc -l | tr -d ' ')
     fi
-    # Also check root CMakeLists files
-    for f in "${CMAKE_FILES[@]}"; do
-        [ -f "$f" ] && [ "$f" -nt "$full_path" ] && (( newer_count++ )) || true
-    done
 
     if [ "$newer_count" -gt 0 ]; then
         printf "    ${WARN} %-48s STALE (%d source file(s) newer)\n" "$artifact" "$newer_count"

@@ -6,7 +6,7 @@ import { startDataCache } from '@/lib/data-cache';
 import { useCallback, useEffect, useMemo, useRef, useState, startTransition } from 'react';
 import { SystemState, CommandPayload, MessageType } from '@/lib/types';
 import PressureBar from '@/components/plots/PressureBar';
-import { PRESSURE_BAR_SENSORS, getEntityColor } from '@/lib/sensor-colors';
+import { PRESSURE_BAR_SENSORS, getEntityColor, plotEntityKeysForPressureBar } from '@/lib/sensor-colors';
 import NotificationPanel from '@/components/dashboard/NotificationPanel';
 import { useControlMode } from '@/lib/control-mode';
 
@@ -45,6 +45,11 @@ function ReactivePressureBar({ label, entity, nop, meop, color, avgEntities }: {
   color: string;
   avgEntities?: string[];
 }) {
+  const togglePressureHistoryPlotVisibility = useSensorStore((s) => s.togglePressureHistoryPlotVisibility);
+  const hiddenMap = useSensorStore((s) => s.pressureHistoryHiddenEntities);
+  const plotKeys = useMemo(() => plotEntityKeysForPressureBar(entity, avgEntities), [entity, avgEntities]);
+  const traceHidden = plotKeys.some((k) => hiddenMap[k]);
+
   const primaryEntity = avgEntities?.[0] ?? entity;
   const v1 = useSensorValue(primaryEntity, 'pressure_psi');
   const v2 = useSensorValue(avgEntities?.[1] ?? primaryEntity, 'pressure_psi');
@@ -52,8 +57,11 @@ function ReactivePressureBar({ label, entity, nop, meop, color, avgEntities }: {
     ? (v1 + v2) / 2
     : v1;
   return (
-    <div
-      className="min-w-0 h-full overflow-visible flex-1"
+    <button
+      type="button"
+      title={traceHidden ? 'Show this sensor on Pressure History (click)' : 'Hide this sensor from Pressure History (click)'}
+      onClick={() => togglePressureHistoryPlotVisibility(plotKeys)}
+      className={`min-w-0 h-full overflow-visible flex-1 text-left rounded-lg transition-opacity hover:opacity-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/80 ${traceHidden ? 'opacity-45' : 'opacity-100'}`}
       style={{ minWidth: '6%', maxWidth: '14%' }}
     >
       <PressureBar
@@ -62,7 +70,7 @@ function ReactivePressureBar({ label, entity, nop, meop, color, avgEntities }: {
         nop={nop} meop={meop} color={color}
         compact
       />
-    </div>
+    </button>
   );
 }
 

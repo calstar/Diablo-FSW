@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react';
-import { useSensorStore, useSensorValue } from '@/lib/store';
+import { useSensorStore, useSensorValue, usePressureHistoryPlotSeries } from '@/lib/store';
 import { getWebSocketClient } from '@/lib/websocket';
 import { MessageType, SystemState, ActuatorId } from '@/lib/types';
 import { startDataCache } from '@/lib/data-cache';
@@ -105,6 +105,7 @@ export default function UnifiedDashboard() {
 
   const isFireState = currentState === SystemState.FIRE;
   const effectivePressureSensorsPlot = pressureSensorsPlot.length > 0 ? pressureSensorsPlot : FALLBACK_PRESSURE_SENSORS_PLOT;
+  const pressurePlotForChart = usePressureHistoryPlotSeries(effectivePressureSensorsPlot);
 
   return (
     <main className="h-full w-full bg-background text-text flex flex-col overflow-hidden">
@@ -139,10 +140,10 @@ export default function UnifiedDashboard() {
             <div className="flex-1 min-h-0">
               <TimeSeriesPlot
                 title="All Pressure Sensors (PSI)"
-                entities={effectivePressureSensorsPlot.map(s => s.entity)}
-                labels={effectivePressureSensorsPlot.map(s => s.label)}
+                entities={pressurePlotForChart.map(s => s.entity)}
+                labels={pressurePlotForChart.map(s => s.label)}
                 component="pressure_psi"
-                colors={effectivePressureSensorsPlot.map(s => s.color)}
+                colors={pressurePlotForChart.map(s => s.color)}
                 yLabel="Pressure (PSI)"
                 windowSeconds={timeWindow}
               />

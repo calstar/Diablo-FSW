@@ -244,6 +244,10 @@ fi
 
 printf "\n  Checking binaries:\n"
 
+# CMake SHARED targets: .so on Linux/WSL (also used when flashing), .dylib on macOS
+SHLIB_EXT=".so"
+[ "$PLATFORM" = "macOS" ] && SHLIB_EXT=".dylib"
+
 EXPECTED_BINS=(
     "build/FSW/daq_bridge"
     "build/FSW/controller_service"
@@ -251,8 +255,8 @@ EXPECTED_BINS=(
     "build/FSW/actuator_service"
     "build/FSW/heartbeat_service"
     "build/FSW/config_broadcast_service"
-    "build/FSW/libfsw_daq_lib.so"
-    "build/daq_comms/libdaq_comms_lib.so"
+    "build/FSW/libfsw_daq_lib${SHLIB_EXT}"
+    "build/daq_comms/libdaq_comms_lib${SHLIB_EXT}"
 )
 
 SOURCE_DIRS=()

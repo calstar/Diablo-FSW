@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react';
-import { useSensorStore, useSensorValue } from '@/lib/store';
+import { useSensorStore, useSensorValue, usePressureHistoryPlotSeries } from '@/lib/store';
 import { getWebSocketClient } from '@/lib/websocket';
 import { SystemState, ActuatorId, CommandPayload } from '@/lib/types';
 import { startDataCache } from '@/lib/data-cache';
@@ -151,6 +151,8 @@ export default function MobileDashboard() {
     color: s.color,
   }));
 
+  const pressurePlotForChart = usePressureHistoryPlotSeries(PRESSURE_SENSORS_PLOT);
+
   return (
     <div className="flex flex-col h-full overflow-y-auto overflow-x-hidden bg-background text-text">
 
@@ -255,10 +257,10 @@ export default function MobileDashboard() {
           <div className="flex-1 min-h-0">
             <TimeSeriesPlot
               title="All Pressure Sensors (PSI)"
-              entities={PRESSURE_SENSORS_PLOT.map((s) => s.entity)}
-              labels={PRESSURE_SENSORS_PLOT.map((s) => s.label)}
+              entities={pressurePlotForChart.map((s) => s.entity)}
+              labels={pressurePlotForChart.map((s) => s.label)}
               component="pressure_psi"
-              colors={PRESSURE_SENSORS_PLOT.map((s) => s.color)}
+              colors={pressurePlotForChart.map((s) => s.color)}
               yLabel="PSI"
               windowSeconds={timeWindow}
             />

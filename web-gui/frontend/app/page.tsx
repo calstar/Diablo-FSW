@@ -109,10 +109,6 @@ export default function Home() {
     });
   }, [boardsMap]);
 
-  useEffect(() => {
-    ws.connect();
-  }, [ws]);
-
   const pressureSensors: SensorCardProps[] = [
     ...PRESSURE_SENSORS.map((s) => ({
       label: s.label.replace('Upstream', 'Up').replace('Downstream', 'Down'),

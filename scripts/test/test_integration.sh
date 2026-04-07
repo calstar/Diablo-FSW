@@ -211,13 +211,13 @@ sleep 0.5
 # ── Build C++ binaries ───────────────────────────────────────────────────────
 
 echo "🔨 Building C++ binaries..."
-FSW_BUILD_DIR="$REPO_ROOT/FSW/build"
+FSW_BUILD_DIR="$REPO_ROOT/build"
 if [ ! -d "$FSW_BUILD_DIR" ]; then
   mkdir -p "$FSW_BUILD_DIR"
-  (cd "$FSW_BUILD_DIR" && cmake ..)
+  (cd "$FSW_BUILD_DIR" && cmake "$REPO_ROOT")
 fi
 (cd "$FSW_BUILD_DIR" && make -j"$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)" \
-  daq_bridge sequencer_service heartbeat_service config_broadcast_service calibration_service controller_service 2>&1) \
+  fsw_daq_lib daq_bridge sequencer_service heartbeat_service config_broadcast_service calibration_service controller_service 2>&1) \
   || fail "C++ build failed"
 echo "  ✅ C++ binaries built"
 echo ""
@@ -233,16 +233,16 @@ ELODIN_DB_BIN=""
 [ -z "$ELODIN_DB_BIN" ] && fail "elodin-db not found in PATH or ~/.cargo/bin"
 echo "  ✅ elodin-db: $ELODIN_DB_BIN"
 
-# Find DAQ bridge (check both build layouts)
+# Find DAQ bridge
 DAQ_BRIDGE=""
-for path in "$REPO_ROOT/build/FSW/daq_bridge" "$REPO_ROOT/FSW/build/daq_bridge" "$REPO_ROOT/build/daq_bridge"; do
+for path in "$REPO_ROOT/build/FSW/daq_bridge" "$REPO_ROOT/build/daq_bridge"; do
   [ -x "$path" ] && DAQ_BRIDGE="$path" && break
 done
-[ -z "$DAQ_BRIDGE" ] && fail "daq_bridge not found. Build with: cd FSW/build && cmake .. && make daq_bridge"
+[ -z "$DAQ_BRIDGE" ] && fail "daq_bridge not found. Build with: cd build && cmake .. && make daq_bridge"
 echo "  ✅ daq_bridge: $DAQ_BRIDGE"
 
 CONFIG_BROADCAST_SVC=""
-for path in "$REPO_ROOT/build/FSW/config_broadcast_service" "$REPO_ROOT/FSW/build/config_broadcast_service" "$REPO_ROOT/build/config_broadcast_service"; do
+for path in "$REPO_ROOT/build/FSW/config_broadcast_service" "$REPO_ROOT/build/config_broadcast_service"; do
   [ -x "$path" ] && CONFIG_BROADCAST_SVC="$path" && break
 done
 if [ -n "$CONFIG_BROADCAST_SVC" ]; then
@@ -252,7 +252,7 @@ else
 fi
 
 HEARTBEAT_SVC=""
-for path in "$REPO_ROOT/build/FSW/heartbeat_service" "$REPO_ROOT/FSW/build/heartbeat_service" "$REPO_ROOT/build/heartbeat_service"; do
+for path in "$REPO_ROOT/build/FSW/heartbeat_service" "$REPO_ROOT/build/heartbeat_service"; do
   [ -x "$path" ] && HEARTBEAT_SVC="$path" && break
 done
 if [ -n "$HEARTBEAT_SVC" ]; then
@@ -263,19 +263,19 @@ fi
 
 # Find sequencer_service (optional — command tests skipped if absent)
 SEQ_SVC=""
-for path in "$REPO_ROOT/build/FSW/sequencer_service" "$REPO_ROOT/FSW/build/sequencer_service" "$REPO_ROOT/build/sequencer_service"; do
+for path in "$REPO_ROOT/build/FSW/sequencer_service" "$REPO_ROOT/build/sequencer_service"; do
   [ -x "$path" ] && SEQ_SVC="$path" && break
 done
 if [ -n "$SEQ_SVC" ]; then
   echo "  ✅ sequencer_service: $SEQ_SVC"
 else
   echo "  ⚠️  sequencer_service not found — state/actuator tests will be skipped"
-  echo "       Build with: cd FSW/build && cmake .. && make sequencer_service"
+  echo "       Build with: cd build && cmake .. && make sequencer_service"
 fi
 
 # Find controller_service (optional — controller tests skipped if absent)
 CONTROLLER_SVC=""
-for path in "$REPO_ROOT/build/FSW/controller_service" "$REPO_ROOT/FSW/build/controller_service" "$REPO_ROOT/build/controller_service"; do
+for path in "$REPO_ROOT/build/FSW/controller_service" "$REPO_ROOT/build/controller_service"; do
   [ -x "$path" ] && CONTROLLER_SVC="$path" && break
 done
 if [ -n "$CONTROLLER_SVC" ]; then
@@ -286,7 +286,7 @@ fi
 
 # Find fake packet generator or board simulator (fallback)
 FAKE_GEN=""
-for path in "$REPO_ROOT/build/FSW/fake_packet_generator" "$REPO_ROOT/FSW/build/fake_packet_generator" "$REPO_ROOT/build/daq_comms/fake_packet_generator" "$REPO_ROOT/build/fake_packet_generator"; do
+for path in "$REPO_ROOT/build/FSW/fake_packet_generator" "$REPO_ROOT/build/daq_comms/fake_packet_generator" "$REPO_ROOT/build/fake_packet_generator"; do
   [ -x "$path" ] && FAKE_GEN="$path" && break
 done
 BOARD_SIM="$REPO_ROOT/scripts/board_simulator.py"
@@ -535,7 +535,7 @@ echo "  ✅ Backend started (PID ${PIDS[-1]})"
 # ── Start Calibration Service ────────────────────────────────────────────────
 
 CALIB_SVC=""
-for path in "$REPO_ROOT/build/FSW/calibration_service" "$REPO_ROOT/FSW/build/calibration_service" "$REPO_ROOT/build/calibration_service"; do
+for path in "$REPO_ROOT/build/FSW/calibration_service" "$REPO_ROOT/build/calibration_service"; do
   [ -x "$path" ] && CALIB_SVC="$path" && break
 done
 if [ -n "$CALIB_SVC" ]; then

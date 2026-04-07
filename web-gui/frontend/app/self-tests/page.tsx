@@ -13,7 +13,6 @@ export default function SelfTestsPage() {
     const ws = getWebSocketClient();
 
     useEffect(() => {
-        ws.connect();
         const unsubSensor = ws.on(MessageType.SENSOR_UPDATE, (p: unknown) => updateSensor(p as SensorUpdate));
         const unsubBoards = ws.on(MessageType.BOARD_STATUS_UPDATE, (p: unknown) => {
             const payload = p as BoardStatusPayload;

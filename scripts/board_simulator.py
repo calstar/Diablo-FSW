@@ -142,7 +142,8 @@ class SimulatedBoard:
         self.setup_start_time = time.time()
 
         heartbeat_interval = 1.0  # 1 Hz
-        sensor_interval = 0.02 if self.board_type_str == "ENCODER" else 0.1  # 50 Hz for ENCODER, 10 Hz for others
+        sensor_interval = 0.02 if self.board_type_str == "ENCODER" else 0.1  # 50 Hz for ENCODER, 10 Hz default
+        actuator_current_interval = 0.1  # Explicitly keep actuator current-sense packets at 10 Hz
 
         while self.running:
             now = time.time()
@@ -167,7 +168,12 @@ class SimulatedBoard:
 
             # --- Send Sensor Data (ACTIVE only, matching firmware) ---
             if self.board_state == BOARD_STATE_ACTIVE:
-                if now - last_sensor_data >= sensor_interval:
+                effective_sensor_interval = (
+                    actuator_current_interval
+                    if self.board_type == BOARD_TYPE_ACTUATOR
+                    else sensor_interval
+                )
+                if now - last_sensor_data >= effective_sensor_interval:
                     self._send_sensor_data(ts_ms)
                     last_sensor_data = now
 

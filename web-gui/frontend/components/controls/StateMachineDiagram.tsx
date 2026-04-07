@@ -276,8 +276,6 @@ export default function StateMachineDiagram() {
 
   // Request transitions from backend on mount; fall back to STATIC_TRANSITIONS if unavailable
   useEffect(() => {
-    ws.connect();
-
     const handleTransitions = (payload: unknown) => {
       const data = payload as { transitions: Transition[] };
       if (data?.transitions && Array.isArray(data.transitions) && data.transitions.length > 0) {

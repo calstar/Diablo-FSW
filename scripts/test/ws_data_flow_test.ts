@@ -562,7 +562,7 @@ async function testSensorDataFlow(ws: WebSocket): Promise<void> {
     console.log(`\n  ${boardName} (${maxCount} packets received):`);
     for (const e of boardEntities) {
       const count = entityCounts[e] || 0;
-      const withinSpec = maxCount === 0 || count / maxCount >= 0.85;
+      const withinSpec = maxCount > 0 && count / maxCount >= 0.85;
       const status = withinSpec ? '✅' : '❌';
       console.log(`    ${status} ${e}: ${count}/${maxCount}`);
     }
@@ -570,7 +570,8 @@ async function testSensorDataFlow(ws: WebSocket): Promise<void> {
     const dropped = boardEntities.reduce((sum, e) => sum + (maxCount - (entityCounts[e] || 0)), 0);
     const totalExpected = maxCount * boardEntities.length;
     const totalReceived = totalExpected - dropped;
-    const deliveryPct = totalExpected > 0 ? (totalReceived / totalExpected) * 100 : 100;
+    // maxCount === 0 means no data received at all — treat as 0% delivery, not 100%
+    const deliveryPct = totalExpected > 0 ? (totalReceived / totalExpected) * 100 : 0;
     totalDropped += dropped;
 
     // 85% delivery threshold — small drops are expected because the WS test's
@@ -580,9 +581,11 @@ async function testSensorDataFlow(ws: WebSocket): Promise<void> {
     const DELIVERY_THRESHOLD_PCT = 85;
     const passed = deliveryPct >= DELIVERY_THRESHOLD_PCT;
     assert(passed,
-      dropped === 0
-        ? `${boardName}: 0 dropped — all ${boardEntities.length} channels received ${maxCount} updates each`
-        : `${boardName}: ${dropped} updates dropped (${deliveryPct.toFixed(1)}% delivery) — counts range ${minCount}-${maxCount}${passed ? ' (within tolerance)' : ''}`);
+      maxCount === 0
+        ? `${boardName}: 0 updates received — board sent no data`
+        : dropped === 0
+          ? `${boardName}: 0 dropped — all ${boardEntities.length} channels received ${maxCount} updates each`
+          : `${boardName}: ${dropped} updates dropped (${deliveryPct.toFixed(1)}% delivery) — counts range ${minCount}-${maxCount}${passed ? ' (within tolerance)' : ''}`);
   }
 
   // Total update count — just report, no arbitrary minimum

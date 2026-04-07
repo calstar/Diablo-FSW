@@ -89,7 +89,6 @@ export default function MobileDashboard() {
   const sensors = useSensorConfig();
 
   useEffect(() => {
-    ws.connect();
     try { startDataCache(); } catch { /* already started */ }
   }, [ws]);
 

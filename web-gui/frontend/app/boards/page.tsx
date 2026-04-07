@@ -56,7 +56,6 @@ export default function BoardsPage() {
   }, [boardsByType]);
 
   useEffect(() => {
-    ws.connect();
     const unsub = ws.on(MessageType.BOARD_STATUS_UPDATE, (p: unknown) => {
       const payload = p as BoardStatusPayload;
       if (payload?.boards) updateBoards(payload.boards as BoardStatus[]);

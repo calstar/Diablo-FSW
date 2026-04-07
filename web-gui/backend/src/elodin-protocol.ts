@@ -217,15 +217,22 @@ export function parseElodinPacket(
     }
   }
 
-  // ── Actuator state (0=closed, 1=open): [0x31, ...] ────────────────────────
-  // NOTE: This is derived from raw ADC current-sense readings, not a discrete
-  // hardware state.  The daq_bridge thresholds the current draw to guess
-  // open/closed — see ACT_STATE_ADC_THRESHOLD in daq_bridge_main.cpp.
-  if (high === 0x31 && low >= 0x01 && payload.length >= 10) {
-    const { boardNumber, channel } = decodeLow(low);
-    const state = payload.readUInt8(9);
-    const tsMs = Number(payload.readBigUInt64LE(0) / 1000000n);
-    return [{ entity: `ACT${boardNumber}.CH${channel}`, component: 'actuator_state', value: state, timestamp: tsMs }];
+  // ── Actuator cal/state: [0x31, ...] ────────────────────────────────────────
+  // Calibrated current_a uses the same 21-byte calibrated payload convention with
+  // low-byte calibrated offsets (+0x10). Actuator state uses the compact 10-byte
+  // payload on raw offsets.
+  if (high === 0x31 && low >= 0x01) {
+    const { boardNumber, channel, isRaw } = decodeLow(low);
+    if (channel >= 1 && channel <= 10) {
+      if (!isRaw && payload.length >= RAW_SENSOR_PAYLOAD_SIZE) {
+        return parseCalibratedSensorPayload(payload, channel, `ACT${boardNumber}_Cal.CH${channel}`, 'current_a');
+      }
+      if (isRaw && payload.length >= 10) {
+        const state = payload.readUInt8(9);
+        const tsMs = Number(payload.readBigUInt64LE(0) / 1000000n);
+        return [{ entity: `ACT${boardNumber}.CH${channel}`, component: 'actuator_state', value: state, timestamp: tsMs }];
+      }
+    }
   }
 
   // ── Actuator commanded state: [0x32, ...] ─────────────────────────────────

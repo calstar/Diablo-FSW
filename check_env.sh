@@ -230,7 +230,7 @@ if [ ! -f "$CACHE" ]; then
     error "CMakeCache.txt missing — run: mkdir -p build && cd build && cmake .."
 else
     printf "  ${OK} build/CMakeCache.txt found\n"
-    cmake_val() { grep "^${1}:" "$CACHE" 2>/dev/null | cut -d= -f2-; }
+    cmake_val() { grep "^${1}=" "$CACHE" 2>/dev/null | cut -d= -f2-; }
     BUILD_TYPE="$(cmake_val CMAKE_BUILD_TYPE:STRING)"
     CXX_COMPILER="$(cmake_val CMAKE_CXX_COMPILER:FILEPATH)"
     OPENSSL_INC="$(cmake_val OPENSSL_INCLUDE_DIR:PATH)"
@@ -340,7 +340,14 @@ check_node_env() {
     fi
 
     lock_mtime="$(get_mtime "$lockfile")"
-    mod_mtime="$(get_mtime "$modules")"
+    # Prefer node_modules/.package-lock.json (updated by npm v7+ on every install)
+    # over the node_modules/ directory mtime, which npm does not reliably touch.
+    inner_lock="$modules/.package-lock.json"
+    if [ -f "$inner_lock" ]; then
+        mod_mtime="$(get_mtime "$inner_lock")"
+    else
+        mod_mtime="$(get_mtime "$modules")"
+    fi
 
     if [ "$lock_mtime" -gt "$mod_mtime" ]; then
         diff=$(( lock_mtime - mod_mtime ))

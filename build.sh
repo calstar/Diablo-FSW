@@ -10,7 +10,7 @@ cd build
 
 # Run CMake
 echo "Running CMake..."
-cmake ..
+cmake .. -DCMAKE_BUILD_TYPE=Release
 
 # Build the project
 echo "Building project..."

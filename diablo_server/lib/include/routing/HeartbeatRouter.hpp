@@ -39,11 +39,12 @@ public:
      * wire).
      * @param board_type_wire  Legacy wire enum byte for Elodin (from config when known, else 0).
      * @param receive_ts_ns  Monotonic receive timestamp (nanoseconds).
-     * @param elodin_board_id_if_known  When >= 0 and <= 255, use this for Elodin packet_id {0x10, id}
-     *   and for reconnect state keys — must match config.toml `board_id` so the thin backend
+     * @param elodin_board_id_if_known  When >= 0 and <= 255, use this for Elodin packet_id {0x10,
+     * id} and for reconnect state keys — must match config.toml `board_id` so the thin backend
      *   `boardsStatus` and GUI stay aligned. Firmware often uses a slot index (1–8) while config
-     *   uses composite IDs (e.g. 21 = PT board 1). Sensor streams still work via slot-based [0x20,…]
-     *   IDs, so a wire/config mismatch only breaks board status / heartbeats UI unless overridden.
+     *   uses composite IDs (e.g. 21 = PT board 1). Sensor streams still work via slot-based
+     * [0x20,…] IDs, so a wire/config mismatch only breaks board status / heartbeats UI unless
+     * overridden.
      */
     BoardEvent process_heartbeat(const Diablo::PacketHeader& header,
                                  const Diablo::BoardHeartbeatPacket& heartbeat,

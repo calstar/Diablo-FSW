@@ -231,7 +231,8 @@ static double convert_tc_adc_to_temp_c(int32_t adc_raw, double adc_ref_voltage) 
  * is far off-scale (e.g. multi-million counts); thin backend rejects absurd temperature_c.
  */
 static double clamp_tc_rtd_temp_publish_c(double t_c) {
-    if (!std::isfinite(t_c)) return 0.0;
+    if (!std::isfinite(t_c))
+        return 0.0;
     return std::clamp(t_c, -300.0, 2200.0);
 }
 

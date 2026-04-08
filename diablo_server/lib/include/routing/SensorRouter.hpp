@@ -6,12 +6,12 @@
 #include <unordered_map>
 #include <vector>
 
+#include "../calibration/PTCalibration.hpp"
+#include "../calibration/SensorCalibration.hpp"
 #include "comms/messages/sensor/CalibratedPTMessage.hpp"
 #include "comms/messages/sensor/CalibratedSensorMessages.hpp"
 #include "comms/messages/sensor/SensorMessages.hpp"
 #include "protocol/EncryptedFrame.hpp"
-#include "../calibration/PTCalibration.hpp"
-#include "../calibration/SensorCalibration.hpp"
 
 namespace fsw {
 namespace routing {

@@ -19,7 +19,7 @@ namespace elodin {
  */
 struct BoardChannels {
     uint8_t board_id;
-    uint8_t board_number;  // board_id % 10
+    uint8_t board_number;           // board_id % 10
     std::vector<uint8_t> channels;  // local channels (1-10)
 };
 
@@ -42,8 +42,7 @@ public:
      * Each vector lists boards with their local channels.
      * Entity names: PT<board_number>.CH<n>, ACT<board_number>.CH<n>, etc.
      */
-    static bool register_tables(ElodinClient& client,
-                                const std::vector<BoardChannels>& pt_boards,
+    static bool register_tables(ElodinClient& client, const std::vector<BoardChannels>& pt_boards,
                                 const std::vector<BoardChannels>& act_boards,
                                 const std::vector<BoardChannels>& tc_boards,
                                 const std::vector<BoardChannels>& rtd_boards,

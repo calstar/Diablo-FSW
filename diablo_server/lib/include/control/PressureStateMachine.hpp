@@ -10,9 +10,9 @@
 #include <thread>
 
 #include "comms/messages/control/ControlMessages.hpp"
-#include "transport/NetworkSocket.hpp"
 #include "config/BoardDiscovery.hpp"
 #include "elodin/ElodinClient.hpp"
+#include "transport/NetworkSocket.hpp"
 
 namespace fsw {
 namespace control {

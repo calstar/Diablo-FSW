@@ -14,9 +14,9 @@
 #include <unordered_map>
 #include <vector>
 
+#include "ElodinProtocol.hpp"
 #include "comms/CommsMessage.hpp"
 #include "transport/TCPClient.hpp"
-#include "ElodinProtocol.hpp"
 
 namespace fsw {
 namespace elodin {

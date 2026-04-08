@@ -99,7 +99,7 @@ static bool parseActuatorRole(const std::string& val, ActuatorRole& out,
             out.board_ip =
                 (it != board_id_to_ip.end()) ? it->second : "192.168.2." + std::to_string(bid);
         } else {
-            out.board_id = 11;  // fallback
+            out.board_id = 11;              // fallback
             out.board_ip = "192.168.2.11";  // fallback
         }
     } catch (...) {
@@ -462,10 +462,9 @@ void ActuatorCommander::publishCommandedState(uint8_t channel_id, uint8_t logica
     if (!elodin_ || !elodin_->is_connected())
         return;
 
-    auto ts_ns = static_cast<uint64_t>(
-        std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::steady_clock::now().time_since_epoch())
-            .count());
+    auto ts_ns = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                           std::chrono::steady_clock::now().time_since_epoch())
+                                           .count());
 
     ActuatorCommandedMsg msg(ts_ns, channel_id, logical_pos);
     std::array<uint8_t, 2> table_id = {VTABLE_ACT_CMD_HI, channel_id};

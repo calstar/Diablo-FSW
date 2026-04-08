@@ -765,34 +765,14 @@ function broadcastStateUpdate(): void {
 function handleCommand(ws: WebSocket, command: CommandPayload): void {
   switch (command.commandType) {
     case 'state_transition': {
-      const prevState = currentState;
       const targetState = command.data.state!;
       const stateName = SystemState[targetState] ?? String(targetState);
       const csvName = STATE_TO_CSV_NAME[stateName] ?? stateName;
-      // Optimistic UI: reflect requested state immediately; roll back if sequencer rejects.
-      currentState = targetState;
-      broadcastStateUpdate();
-      // Actuator tiles read ACT_CMD.* from CSV snapshot — do not wait for actuator_service TCP
-      // (that round-trip was causing ~1–2s lag vs state buttons).
-      broadcastCommandedActuatorsForState(currentState);
-      if (targetState === SystemState.FIRE && prevState !== SystemState.FIRE) {
-        sendToControllerService('FIRE_START\n').catch(() => { /* non-fatal */ });
-      } else if (prevState === SystemState.FIRE && targetState !== SystemState.FIRE) {
-        sendToControllerService('FIRE_STOP\n').catch(() => { /* non-fatal */ });
-      }
+      // No optimistic update — real state/actuator positions arrive via _SEQUENCER_STATE [0x50]
+      // and [0x32] packets from Elodin. FIRE_START/FIRE_STOP are sent from the subscriber path.
       sendToActuatorService(`TRANSITION:${csvName}\n`).then(({ ok, reply }) => {
         console.log(`[ThinServer] State transition ${stateName} → ${csvName}: ${ok ? 'OK' : 'FAIL'} (${reply})`);
-        if (ok) {
-          scheduleActuatorMismatchCheck(currentState);
-        } else {
-          currentState = prevState;
-          broadcastStateUpdate();
-          broadcastCommandedActuatorsForState(prevState);
-          if (prevState === SystemState.FIRE && targetState !== SystemState.FIRE) {
-            sendToControllerService('FIRE_START\n').catch(() => { });
-          } else if (targetState === SystemState.FIRE && prevState !== SystemState.FIRE) {
-            sendToControllerService('FIRE_STOP\n').catch(() => { });
-          }
+        if (!ok) {
           send(ws, { type: MessageType.ERROR, timestamp: Date.now(), payload: { message: `State transition failed: ${reply}` } });
         }
       });
@@ -801,37 +781,10 @@ function handleCommand(ws: WebSocket, command: CommandPayload): void {
     case 'actuator': {
       const open = command.data.actuatorState === 1 || command.data.actuatorState as unknown as string === 'open';
       const actuatorName = command.data.actuatorName!;
-      const cmdEntity = resolveActuatorCmdEntity(actuatorName);
-      const v = open ? 1 : 0;
-
-      const pushActuatorCmdBroadcast = (val: number) => {
-        if (!cmdEntity) return;
-        const ts = Date.now();
-        const key = `${cmdEntity}.actuator_state_commanded`;
-        if (firstPacketTimeMs !== null) {
-          const timeSec = (ts - firstPacketTimeMs) / 1000;
-          if (timeSec >= 0 && timeSec < 86400) recordHistory(key, timeSec, val);
-        }
-        stats.sensorUpdatesBroadcast++;
-        broadcast({
-          type: MessageType.SENSOR_UPDATE,
-          timestamp: ts,
-          payload: { entity: cmdEntity, component: 'actuator_state_commanded', value: val, timestamp: ts },
-        });
-      };
-
-      // Optimistic UI; debug manual commands keep the clicked value (sequencer does not re-CSV).
-      pushActuatorCmdBroadcast(v);
-
+      // No optimistic update — real commanded state arrives via [0x32] packets from Elodin.
       sendToActuatorService(`ACTUATOR:${actuatorName}:${open ? 1 : 0}\n`).then(({ ok, reply }) => {
         if (!ok) {
-          pushActuatorCmdBroadcast(open ? 0 : 1);
           send(ws, { type: MessageType.ERROR, timestamp: Date.now(), payload: { message: `Actuator command failed: ${reply}` } });
-          return;
-        }
-        // Non-debug: snap tiles to full state CSV. Debug: keep manual override (do not overwrite click).
-        if (!debugMode) {
-          broadcastCommandedActuatorsForState(currentState);
         }
       });
       break;

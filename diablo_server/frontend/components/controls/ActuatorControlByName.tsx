@@ -35,15 +35,7 @@ export default function ActuatorControlByName({ name, channel, entity, boardId }
       commandType: 'actuator',
       data: { actuatorName: name, actuatorState: state },
     };
-    const val = state === ActuatorState.OPEN ? 1 : 0;
-    if (boardNumber != null) {
-      useSensorStore.getState().updateSensor({
-        entity: commandedEntity,
-        component: 'actuator_state_commanded',
-        value: val,
-        timestamp: Date.now(),
-      });
-    }
+    // No optimistic update — button state reflects [0x32] packets from Elodin via WebSocket.
     ws.sendCommand(command);
     setPending(true);
     window.setTimeout(() => setPending(false), 450);

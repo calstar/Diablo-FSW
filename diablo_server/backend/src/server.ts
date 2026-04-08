@@ -1009,7 +1009,7 @@ elodin.on('packet', (header: any, payload: Buffer) => {
     const epochNow = Date.now();
 
     // ── Self-test results → snapshot + NOTIFICATION ────────────────────
-    if (high === 0x60 && parsedList.length > 0) {
+    if (high >= 0x60 && high <= 0x6F && parsedList.length > 0) {
       const boardId = low;
       for (const parsed of parsedList) {
         const stKey = `${parsed.entity}.${parsed.component}`;

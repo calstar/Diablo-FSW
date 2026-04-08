@@ -1,10 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSensorStore } from '@/lib/store';
-import { selfTestBoardIdsFromSensorData } from '@/lib/self-test-keys';
-import { getWebSocketClient } from '@/lib/websocket';
+import { getApiBaseUrl, getWebSocketClient } from '@/lib/websocket';
 import { MessageType, BoardStatusPayload, BoardStatus, engineStateCodeToLabel } from '@/lib/types';
 
 function formatConfigSentAt(ms: number | undefined): string {
@@ -28,6 +27,29 @@ export default function BoardsPage() {
   const boardsMap = useSensorStore((s) => s.boards as Record<number, BoardStatus>);
   const sensorData = useSensorStore((s) => s.sensorData);
   const ws = getWebSocketClient();
+
+  const [expectedCountById, setExpectedCountById] = useState<Record<number, number>>({});
+
+  useEffect(() => {
+    fetch(`${getApiBaseUrl()}/api/config`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { config?: { boards?: Record<string, { board_id?: number; enabled?: boolean; active_connectors?: number[]; num_sensors?: number }> } } | null) => {
+        const boards = data?.config?.boards;
+        if (!boards || typeof boards !== 'object') return;
+        const next: Record<number, number> = {};
+        Object.values(boards).forEach((b) => {
+          if (b.enabled === false) return;
+          const boardId = Number(b?.board_id);
+          if (!Number.isFinite(boardId) || boardId <= 0) return;
+          const channelCount = Array.isArray(b.active_connectors) && b.active_connectors.length > 0
+            ? b.active_connectors.length
+            : Math.max(0, Number(b.num_sensors) || 0);
+          next[boardId] = 1 + channelCount; // TDAC + channels
+        });
+        setExpectedCountById(next);
+      })
+      .catch(() => {});
+  }, []);
 
   const TYPE_ORDER = ['ACTUATOR', 'PT', 'LC', 'TC', 'RTD', 'ENCODER'];
 
@@ -109,9 +131,13 @@ export default function BoardsPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                   {boards.map((b, index) => {
                     const testKeys = Object.keys(sensorData).filter((k) => k.startsWith(`SELF_TEST.BOARD_${b.id}.`));
-                    let testStatus: 'Untested' | 'Passed' | 'Failed' = 'Untested';
+                    let testStatus: 'Untested' | 'Passed' | 'Failed' | 'Pending' = 'Untested';
                     if (testKeys.length > 0) {
-                      testStatus = testKeys.every(k => sensorData[k] === 1) ? 'Passed' : 'Failed';
+                      const anyFail = testKeys.some(k => sensorData[k] === 0);
+                      const expected = expectedCountById[b.id] ?? 0;
+                      if (anyFail) testStatus = 'Failed';
+                      else if (expected > 0 && testKeys.length < expected) testStatus = 'Pending';
+                      else testStatus = 'Passed';
                     }
                     const accent = CARD_ACCENTS[index % CARD_ACCENTS.length];
                     const freq =
@@ -190,10 +216,14 @@ export default function BoardsPage() {
                         )}
                         <div className="flex items-center gap-2 mb-2 font-mono">
                           <span className="text-text-muted text-sm uppercase tracking-wider">Self Test:</span>
-                          <span className={`text-sm font-bold ${testStatus === 'Passed' ? 'text-green-400' :
-                            testStatus === 'Failed' ? 'text-red-400' : 'text-gray-500'
+                          <span className={`text-sm font-bold ${
+                            testStatus === 'Passed' ? 'text-green-400' :
+                            testStatus === 'Failed' ? 'text-red-400' :
+                            testStatus === 'Pending' ? 'text-amber-400' : 'text-gray-500'
                             }`}>
-                            {testStatus === 'Passed' ? 'ALL PASSED' : testStatus === 'Failed' ? 'FAILED' : 'UNTESTED'}
+                            {testStatus === 'Passed' ? 'ALL PASSED' :
+                             testStatus === 'Failed' ? 'FAILED' :
+                             testStatus === 'Pending' ? 'PENDING' : 'UNTESTED'}
                           </span>
                         </div>
                         <div className="text-base text-text-muted font-mono mb-2">
@@ -220,45 +250,6 @@ export default function BoardsPage() {
         </div>
       )}
 
-      <div className="mt-12">
-        <h2 className="text-2xl font-bold text-text mb-4 tracking-tight">Self Tests</h2>
-        {(() => {
-          const testedIds = selfTestBoardIdsFromSensorData(sensorData);
-          if (testedIds.length === 0) {
-            return <div className="text-text-muted italic">No self test data available yet.</div>;
-          }
-          return (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {testedIds.map((boardId) => {
-                const b = boardsMap?.[boardId];
-                const testKeys = Object.keys(sensorData).filter((k) => k.startsWith(`SELF_TEST.BOARD_${boardId}.`));
-                const allPassed = testKeys.every(k => sensorData[k] === 1);
-                const title = b
-                  ? `${b.type || 'BOARD'} ${b.boardNumber != null ? b.boardNumber : ''}`.trim()
-                  : `Board ${boardId}`;
-                return (
-                  <div key={boardId} className={`rounded-xl border p-5 ${allPassed ? 'border-green-900/50 bg-green-950/10' : 'border-red-900/50 bg-red-950/10'}`}>
-                    <h3 className="text-lg font-bold mb-3">{title} (ID {boardId})</h3>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
-                      {testKeys.map(k => {
-                        const sensorMatch = k.match(/sensor_(\d+)/);
-                        const sensorId = sensorMatch ? sensorMatch[1] : '?';
-                        const passed = sensorData[k] === 1;
-                        return (
-                          <div key={k} className="flex items-center justify-between bg-black/20 px-3 py-2 rounded border border-white/5">
-                            <span className="font-mono text-sm text-text-muted">CH {sensorId}</span>
-                            <span className={`font-bold text-sm ${passed ? 'text-green-400' : 'text-red-400'}`}>{passed ? 'PASS' : 'FAIL'}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })()}
-      </div>
     </main>
   );
 }

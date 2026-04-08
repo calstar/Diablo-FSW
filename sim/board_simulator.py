@@ -15,6 +15,7 @@ PACKET_TYPE_HEARTBEAT = 1
 PACKET_TYPE_SENSOR_DATA = 3
 PACKET_TYPE_ACTUATOR_COMMAND = 4
 PACKET_TYPE_SENSOR_CONFIG = 5
+PACKET_TYPE_ACTUATOR_CONFIG = 6
 PACKET_TYPE_SELF_TEST = 12
 
 # Board States (DAQv2-Comms DiabloEnums.h)
@@ -79,8 +80,6 @@ class SimulatedBoard:
 
         # State machine (matches SensorHotfireCore.h lifecycle)
         self.board_state = BOARD_STATE_ACTIVE if skip_startup else BOARD_STATE_SETUP
-        self.setup_start_time = None
-        self.setup_timeout = 10.0  # fallback to ACTIVE if no SENSOR_CONFIG
         self.can_receive = False  # whether socket is bound to listen_port
 
         self.running = False
@@ -139,7 +138,6 @@ class SimulatedBoard:
     def _run(self):
         last_heartbeat = 0
         last_sensor_data = 0
-        self.setup_start_time = time.time()
 
         heartbeat_interval = 1.0  # 1 Hz
         sensor_interval = 0.02 if self.board_type_str == "ENCODER" else 0.1  # 50 Hz for ENCODER, 10 Hz default
@@ -149,17 +147,10 @@ class SimulatedBoard:
             now = time.time()
             ts_ms = int(now * 1000) & 0xFFFFFFFF
 
-            # --- SETUP: check for SENSOR_CONFIG ---
+            # --- SETUP: wait for SENSOR_CONFIG (no timeout — matches real firmware) ---
             if self.board_state == BOARD_STATE_SETUP:
                 if self.can_receive:
                     self._check_for_sensor_config()
-                # Timeout fallback
-                if self.board_state == BOARD_STATE_SETUP and (now - self.setup_start_time) > self.setup_timeout:
-                    print(
-                        f"[{self.name}] SETUP timeout ({self.setup_timeout}s), going ACTIVE",
-                        flush=True,
-                    )
-                    self.board_state = BOARD_STATE_ACTIVE
 
             # --- Send Heartbeat (all states, matching firmware) ---
             if now - last_heartbeat >= heartbeat_interval:
@@ -180,12 +171,13 @@ class SimulatedBoard:
             time.sleep(0.01)
 
     def _check_for_sensor_config(self):
-        """Non-blocking check for SENSOR_CONFIG packet from config_broadcast_service."""
+        """Non-blocking check for SENSOR_CONFIG or ACTUATOR_CONFIG from config_broadcast_service."""
         try:
             data, addr = self.sock.recvfrom(4096)
-            if data and len(data) >= 1 and data[0] == PACKET_TYPE_SENSOR_CONFIG:
+            if data and len(data) >= 1 and data[0] in (PACKET_TYPE_SENSOR_CONFIG, PACKET_TYPE_ACTUATOR_CONFIG):
+                pkt_name = "ACTUATOR_CONFIG" if data[0] == PACKET_TYPE_ACTUATOR_CONFIG else "SENSOR_CONFIG"
                 print(
-                    f"[{self.name}] SENSOR_CONFIG received from {addr}, running self-test",
+                    f"[{self.name}] {pkt_name} received from {addr}, running self-test",
                     flush=True,
                 )
                 # Firmware: run self-test once, send results, immediately go ACTIVE
@@ -202,8 +194,12 @@ class SimulatedBoard:
     def _send_self_test(self):
         """Send SELF_TEST packet with pass results for all active connectors.
 
-        Matches firmware SelfTestPacket: header(6B) + adc_good(1B) + num_sensors(1B)
-        + N x (sensor_id(1B) + result(1B)).
+        Wire format (matches firmware SensorHotfireCore.h):
+          header(6B) + adc_good(1B) + num_sensors(1B) + N x (sensor_id(1B) + result(1B))
+
+        Firmware extracts sensor_0 (TDAC) from the results list and puts it in
+        the adc_good field. The DAQ bridge publishes adc_good as a sensor_id=0
+        Elodin row, then publishes each per-channel result separately.
         """
         active_connectors = self.config.get("active_connectors", [])
         if not active_connectors:
@@ -212,11 +208,11 @@ class SimulatedBoard:
         ts_ms = int(time.time() * 1000) & 0xFFFFFFFF
         header = struct.pack("<BBI", PACKET_TYPE_SELF_TEST, 0, ts_ms)
 
-        adc_good = 1  # ADC TDAC self-test passed
+        adc_good = 1
         n = min(len(active_connectors), 255)
         body = struct.pack("BB", adc_good, n)
         for sensor_id in active_connectors[:n]:
-            body += struct.pack("BB", sensor_id & 0xFF, 1)  # 1 = pass
+            body += struct.pack("BB", sensor_id & 0xFF, 1)
 
         try:
             self.sock.sendto(header + body, (self.target_ip, self.target_port))

@@ -17,13 +17,13 @@ import sys
 
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
-from scripts.calibration.calibration_orchestrator import (
+from scripts.calibration.calibration_orchestrator import (  # noqa: E402
     CalibrationOrchestrator,
-)  # noqa: E402
-from scripts.calibration.robust_calibration import (
+)
+from scripts.calibration.robust_calibration import (  # noqa: E402
     CalibrationPoint,
     EnvironmentalState,
-)  # noqa: E402
+)
 from scripts.calibration.sense_conversions import (  # noqa: E402
     raw_to_physical,
     hp_pt_adc_to_psi,
@@ -32,6 +32,9 @@ from scripts.calibration.config_loader import (  # noqa: E402
     load_config,
     build_channel_to_orchestrator_key,
     get_hp_pt_packet_channels,
+    get_excitation_packet_channels,
+    decode_board_namespaced_low,
+    packet_ch_for_board_connector,
 )
 
 logging.basicConfig(
@@ -67,31 +70,44 @@ class ElodinWriter:
             return False
 
     def write_calibrated_pt(
-        self, channel_id: int, pressure_psi: float, raw_adc: int = 0
+        self,
+        connector_id: int,
+        pressure_psi: float,
+        raw_adc: int,
+        *,
+        raw_packet_low: int,
     ) -> bool:
         """
-        Write a calibrated PT TABLE packet to Elodin DB.
-        Packet ID: [0x20, 0x10 + channel_id]. Payload: ts_ns(8)+ch(1)+pad(3)+psi(f32)+raw(u32)+flags(1)
+        Write calibrated PT to Elodin. Packet low byte = raw_packet_low + 0x10 (board-namespaced),
+        matching FSW calibration_service / daq_bridge (NOT legacy 0x10 + global_ch).
         """
-        return self._write_calibrated(0x20, channel_id, pressure_psi, raw_adc)
+        return self._write_calibrated(
+            0x20, raw_packet_low, connector_id, pressure_psi, raw_adc
+        )
 
     def _write_calibrated(
-        self, high: int, channel_id: int, value: float, raw_counts: int
+        self,
+        high: int,
+        raw_packet_low: int,
+        connector_id: int,
+        value: float,
+        raw_counts: int,
     ) -> bool:
-        """Generic calibrated write: 21-byte payload, packet_id [high, 0x10+channel_id]."""
+        """21-byte TABLE row; cal packet id [high, raw_low + 0x10] (same rule as C++ cal_main)."""
         if not self.connected or not self.sock:
             return False
         try:
+            cal_low = (raw_packet_low + 0x10) & 0xFF
             ts_ns = time.time_ns()
             payload = struct.pack("<Q", ts_ns)
-            payload += struct.pack("<B", channel_id)
+            payload += struct.pack("<B", connector_id & 0xFF)
             payload += bytes(3)
             payload += struct.pack("<f", value)
-            payload += struct.pack("<I", raw_counts & 0xFFFFFFFF)  # handle signed (LC)
+            payload += struct.pack("<I", raw_counts & 0xFFFFFFFF)
             payload += struct.pack("<B", 0)
             header = struct.pack("<I", len(payload) + 4)
             header += struct.pack("<B", 1)  # TABLE
-            header += struct.pack("<BB", high, 0x10 + channel_id)
+            header += struct.pack("<BB", high, cal_low)
             header += struct.pack("<B", 0)
             self.sock.sendall(header + payload)
             return True
@@ -102,20 +118,35 @@ class ElodinWriter:
             return False
 
     def write_calibrated_tc(
-        self, channel_id: int, temperature_c: float, raw_adc: int
+        self,
+        connector_id: int,
+        temperature_c: float,
+        raw_adc: int,
+        *,
+        raw_packet_low: int,
     ) -> bool:
-        """Write calibrated TC to Elodin. Packet ID: [0x21, 0x10+channel_id]."""
-        return self._write_calibrated(0x21, channel_id, temperature_c, raw_adc)
+        return self._write_calibrated(
+            0x21, raw_packet_low, connector_id, temperature_c, raw_adc
+        )
 
     def write_calibrated_rtd(
-        self, channel_id: int, temperature_c: float, raw_counts: int
+        self,
+        connector_id: int,
+        temperature_c: float,
+        raw_counts: int,
+        *,
+        raw_packet_low: int,
     ) -> bool:
-        """Write calibrated RTD to Elodin. Packet ID: [0x22, 0x10+channel_id]."""
-        return self._write_calibrated(0x22, channel_id, temperature_c, raw_counts)
+        return self._write_calibrated(
+            0x22, raw_packet_low, connector_id, temperature_c, raw_counts
+        )
 
-    def write_calibrated_lc(self, channel_id: int, force: float, raw_adc: int) -> bool:
-        """Write calibrated LC to Elodin. Packet ID: [0x23, 0x10+channel_id]."""
-        return self._write_calibrated(0x23, channel_id, force, raw_adc)
+    def write_calibrated_lc(
+        self, connector_id: int, force: float, raw_adc: int, *, raw_packet_low: int
+    ) -> bool:
+        return self._write_calibrated(
+            0x23, raw_packet_low, connector_id, force, raw_adc
+        )
 
 
 def _parse_raw_adc(payload: bytes) -> Optional[int]:
@@ -134,10 +165,81 @@ def _parse_raw_signed(payload: bytes) -> Optional[int]:
     return None
 
 
+def _parse_int32_at_12(payload: bytes) -> Optional[int]:
+    """Signed ADC at offset 12 (PT/LP, TC, RTD raw on wire)."""
+    if len(payload) >= 21:
+        return struct.unpack_from("<i", payload, 12)[0]
+    return None
+
+
 # Per-channel write throttle (configurable, default 100 Hz)
 _last_elodin_write: dict = {}
 _first_calibrated_write_logged: set = set()
-_hp_pt_channels_cache: dict = {}  # cached for speed
+_hp_pt_channels_cache: dict = {}       # {packet_ch: hp_pt_cfg}  — populated lazily
+_excitation_channels_cache: dict = {}  # {packet_ch: exc_cfg}    — populated lazily
+
+# ── EMA (exponential moving average) noise filter ────────────────────────────
+# Applied to LP PT channels before writing calibrated value to Elodin.
+# alpha=1.0 disables filtering; lower values smooth more at the cost of lag.
+_EMA_ALPHA_DEFAULT = 0.4  # ~4 Hz effective bandwidth at 20 Hz sample rate
+_ema_state: dict = {}  # packet_ch → last EMA value
+
+
+def _apply_ema(key: int, value: float, alpha: float = _EMA_ALPHA_DEFAULT) -> float:
+    prev = _ema_state.get(key)
+    if prev is None or not math.isfinite(prev):
+        _ema_state[key] = value
+        return value
+    ema = alpha * value + (1.0 - alpha) * prev
+    _ema_state[key] = ema
+    return ema
+
+
+def _reset_ema_for_packet_channels(packet_channels: list) -> None:
+    """Clear EMA state for a list of packet_ch values so corrected values take effect immediately."""
+    for pch in packet_channels:
+        _ema_state.pop(pch, None)
+
+
+def _apply_direct_offset_correction(
+    key: tuple,
+    adc_code: float,
+    target_psi: float,
+) -> bool:
+    """
+    Directly correct theta_mean[0] (the D intercept) so the RCF outputs target_psi
+    at the given adc_code without disturbing the slope coefficients.
+    Returns True if the correction was applied.
+    """
+    rcf = state.orchestrator.robust.get(key)
+    if rcf is None:
+        return False
+    try:
+        current_pred, _ = rcf.predict_pressure_with_uncertainty(
+            float(adc_code), state.env_state
+        )
+        if not math.isfinite(current_pred):
+            return False
+        delta = current_pred - target_psi
+        rcf.theta_mean[0] -= delta
+        # Tighten covariance on the offset term to reflect this high-confidence fix.
+        rcf.theta_cov[0, 0] = max(rcf.theta_cov[0, 0] * 0.1, 1e-4)
+        return True
+    except Exception:
+        return False
+
+
+def _parse_pt_raw_for_packet_ch(payload: bytes, packet_ch: int) -> Optional[int]:
+    """HP PT / excitation: unsigned ADC; LP PT: signed ADS1262 counts (matches FSW)."""
+    if len(payload) < 21:
+        return None
+    if not _hp_pt_channels_cache:
+        _hp_pt_channels_cache.update(get_hp_pt_packet_channels())
+    if not _excitation_channels_cache:
+        _excitation_channels_cache.update(get_excitation_packet_channels())
+    if packet_ch in _hp_pt_channels_cache or packet_ch in _excitation_channels_cache:
+        return struct.unpack_from("<I", payload, 12)[0]
+    return struct.unpack_from("<i", payload, 12)[0]
 
 
 def _throttle_key(stype: str, ch: int) -> str:
@@ -170,69 +272,96 @@ def _get_raw_conversion_config():
 
 def _process_raw_and_write_calibrated(
     stype: str,
-    channel_id: int,
+    packet_ch: int,
     raw_val: int,
     writer: Any,
     channel_to_key: dict,
+    *,
+    connector_id: int,
+    raw_packet_low: int,
 ) -> None:
-    """Compute calibrated value (RCF or raw conversion) and write to Elodin DB.
-    Reuses prediction from _online_update when fresh to avoid double compute.
-    """
-    interval = (
-        config.get("calibration", {}).get("sidecar", {}).get("write_interval_sec", 0.01)
-    )
+    """Compute calibrated value (RCF or raw conversion) and optionally write to Elodin DB."""
+    sidecar_cfg = config.get("calibration", {}).get("sidecar", {})
+    if not sidecar_cfg.get("write_to_elodin", True):
+        return
+
+    interval = float(sidecar_cfg.get("write_interval_sec", 0.01))
     now = time.monotonic()
-    throttle_key = _throttle_key(stype, channel_id)
+    throttle_key = _throttle_key(stype, packet_ch)
     if now - _last_elodin_write.get(throttle_key, 0) < interval:
         return
 
+    # Ensure caches are populated (done once per process lifetime)
+    if not _hp_pt_channels_cache:
+        _hp_pt_channels_cache.update(get_hp_pt_packet_channels())
+    if not _excitation_channels_cache:
+        _excitation_channels_cache.update(get_excitation_packet_channels())
+
     pred = None
-    key = channel_to_key.get((stype, channel_id))
+    is_hp_pt = stype == "PT" and packet_ch in _hp_pt_channels_cache
+    is_excitation = stype == "PT" and packet_ch in _excitation_channels_cache
+    key = channel_to_key.get((stype, packet_ch))
 
-    # Path 1: Reuse fresh prediction from _online_update (avoids duplicate predict)
-    if key and key in state.orchestrator.latest_predictions:
-        p, _, ts = state.orchestrator.latest_predictions[key]
-        if now - ts < 0.5 and math.isfinite(p):
-            pred = p
+    # Path 0E: Excitation voltage — ADC → actual loop supply volts (bypass all pressure paths).
+    if is_excitation:
+        exc_cfg = _excitation_channels_cache[packet_ch]
+        adc_ref = exc_cfg["adc_ref_voltage"]
+        attenuation = exc_cfg["divider_attenuation"]
+        if attenuation > 0:
+            v_adc = (float(raw_val) / 2_147_483_648.0) * adc_ref
+            pred = v_adc / attenuation
 
-    # Path 2: Compute via RCF if no fresh prediction
-    if pred is None and key and key in state.orchestrator.robust:
-        try:
-            rcf = state.orchestrator.robust[key]
-            pred, _unc = rcf.predict_pressure_with_uncertainty(
-                float(raw_val), state.env_state
-            )
-        except Exception:
-            pass
-
-    # Path 3: HP PT (4-20 mA) — linear conversion when robust stack excludes HP
-    if pred is None and stype == "PT":
-        if not _hp_pt_channels_cache:
-            _hp_pt_channels_cache.update(get_hp_pt_packet_channels())
-        hp_cfg = _hp_pt_channels_cache.get(channel_id)
-        if hp_cfg:
-            pred = hp_pt_adc_to_psi(
-                raw_val,
-                hp_cfg["full_scale_psi"],
-                hp_cfg["sense_resistor_ohms"],
-                hp_cfg["adc_ref_voltage"],
-            )
-
-    # Path 4: Fallback to raw physical conversion (sense_conversions) for TC/RTD/LC/PT
-    if pred is None or not math.isfinite(pred):
-        cfg = _get_raw_conversion_config()
-        pred = raw_to_physical(
-            stype,
+    # Path 0H: HP PT (4-20 mA) — bypass RCF entirely; the orchestrator's polynomial
+    # is calibrated for LP PT voltage-mode inputs and produces garbage for HP PT.
+    # board_simulator.py generates valid 4-20 mA ADC codes for HP PT connectors, so
+    # hp_pt_adc_to_psi is correct in both sim and real-hardware modes.
+    elif is_hp_pt:
+        hp_cfg = _hp_pt_channels_cache[packet_ch]
+        pred = hp_pt_adc_to_psi(
             raw_val,
-            channel_id=channel_id,
-            rtd_r0=cfg["rtd_r0"],
-            rtd_adc_ref_v=cfg["rtd_adc_ref_v"],
-            rtd_excitation_ua=cfg["rtd_excitation_ua"],
-            tc_adc_ref_v=cfg["tc_adc_ref_v"],
-            lc_sensitivity_mv_per_v=cfg["lc_sensitivity_mv_per_v"],
-            lc_pga_gain=cfg["lc_pga_gain"],
-            lc_full_scale_value=cfg["lc_full_scale_value"],
+            hp_cfg["full_scale_psi"],
+            hp_cfg["sense_resistor_ohms"],
+            hp_cfg["adc_ref_voltage"],
         )
+
+    else:
+        # Path 1: Reuse fresh prediction from _online_update (avoids duplicate predict)
+        if key and key in state.orchestrator.latest_predictions:
+            p, _, ts = state.orchestrator.latest_predictions[key]
+            if now - ts < 0.5 and math.isfinite(p):
+                pred = p
+
+        # Path 2: Compute via RCF (LP PT polynomial / Bayesian model)
+        if pred is None and key and key in state.orchestrator.robust:
+            try:
+                rcf = state.orchestrator.robust[key]
+                pred, _unc = rcf.predict_pressure_with_uncertainty(
+                    float(raw_val), state.env_state
+                )
+            except Exception:
+                pass
+
+        # Path 4: Fallback to raw physical conversion for TC/RTD/LC/LP PT
+        if pred is None or not math.isfinite(pred):
+            cfg = _get_raw_conversion_config()
+            pred = raw_to_physical(
+                stype,
+                raw_val,
+                channel_id=packet_ch,
+                rtd_r0=cfg["rtd_r0"],
+                rtd_adc_ref_v=cfg["rtd_adc_ref_v"],
+                rtd_excitation_ua=cfg["rtd_excitation_ua"],
+                tc_adc_ref_v=cfg["tc_adc_ref_v"],
+                lc_sensitivity_mv_per_v=cfg["lc_sensitivity_mv_per_v"],
+                lc_pga_gain=cfg["lc_pga_gain"],
+                lc_full_scale_value=cfg["lc_full_scale_value"],
+            )
+
+        # EMA noise filter — only for LP PT (noisy ratiometric ADC)
+        if pred is not None and math.isfinite(pred) and stype == "PT":
+            sidecar_cfg2 = config.get("calibration", {}).get("sidecar", {})
+            alpha = float(sidecar_cfg2.get("ema_alpha", _EMA_ALPHA_DEFAULT))
+            pred = _apply_ema(packet_ch, pred, alpha)
 
     if pred is None or not math.isfinite(pred):
         return
@@ -242,19 +371,73 @@ def _process_raw_and_write_calibrated(
         writer.connect()
 
     if stype == "PT":
-        writer.write_calibrated_pt(channel_id, float(pred), raw_val)
+        writer.write_calibrated_pt(
+            connector_id, float(pred), raw_val, raw_packet_low=raw_packet_low
+        )
     elif stype == "TC":
-        writer.write_calibrated_tc(channel_id, float(pred), raw_val)
+        writer.write_calibrated_tc(
+            connector_id, float(pred), raw_val, raw_packet_low=raw_packet_low
+        )
     elif stype == "RTD":
-        writer.write_calibrated_rtd(channel_id, float(pred), raw_val)
+        writer.write_calibrated_rtd(
+            connector_id, float(pred), raw_val, raw_packet_low=raw_packet_low
+        )
     elif stype == "LC":
-        writer.write_calibrated_lc(channel_id, float(pred), raw_val)
-    k = (stype, channel_id)
+        writer.write_calibrated_lc(
+            connector_id, float(pred), raw_val, raw_packet_low=raw_packet_low
+        )
+    k = (stype, packet_ch)
     if k not in _first_calibrated_write_logged:
         _first_calibrated_write_logged.add(k)
         logger.info(
-            f"[Cal] First calibrated write: {stype} ch{channel_id} → {pred:.2f}"
+            f"[Cal] First calibrated write: {stype} packet_ch={packet_ch} → {pred:.2f}"
         )
+
+
+_ADJUSTMENTS_PATH = Path(__file__).resolve().parent / "calibrations" / "adjustments.json"
+
+
+def _auto_save_adjustments() -> None:
+    """
+    Persist all RLS-learned theta_mean / theta_cov back to adjustments.json so
+    that the next server restart loads the latest autonomous calibration state.
+    Channels are keyed by unique_id = board_id * 100 + connector (framework_v2 format).
+    Only channels that have an active RCF entry are written; any existing channels
+    without an RCF entry are preserved.
+    """
+    rcf_map = state.orchestrator.robust  # {(stype, unique_ch): RCF}
+    if not rcf_map:
+        return
+
+    # Load existing data so we don't clobber unrelated keys
+    existing: dict = {}
+    if _ADJUSTMENTS_PATH.exists():
+        try:
+            with open(_ADJUSTMENTS_PATH) as f:
+                existing = json.load(f)
+        except Exception:
+            pass
+
+    fw2 = existing.get("framework_v2", {})
+    for (stype, unique_ch), rcf in rcf_map.items():
+        if stype != "PT":
+            continue  # only PT uses this format currently
+        key_str = str(unique_ch)
+        fw2[key_str] = {
+            "theta_mean": rcf.theta_mean.tolist(),
+            "theta_cov": rcf.theta_cov.tolist(),
+            "rls_updates": getattr(rcf, "rls_updates", 0),
+            "saved_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        }
+
+    existing["framework_v2"] = fw2
+    existing["auto_saved_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+    _ADJUSTMENTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = _ADJUSTMENTS_PATH.with_suffix(".json.tmp")
+    with open(tmp, "w") as f:
+        json.dump(existing, f, indent=2)
+    tmp.replace(_ADJUSTMENTS_PATH)
+    logger.info(f"[AutoSave] adjustments.json updated ({len(fw2)} PT channels)")
 
 
 async def relay_subscriber_task():
@@ -273,9 +456,18 @@ async def relay_subscriber_task():
     elodin_port = elodin_cfg.get("port", 2240)
     writer = ElodinWriter(elodin_host, elodin_port)
     channel_to_key = build_channel_to_orchestrator_key()
+    _we = sidecar_cfg.get("write_to_elodin", True)
     logger.info(
-        f"[Relay] Relay subscriber starting → {relay_url} (channel map: {len(channel_to_key)} entries)"
+        f"[Relay] Relay subscriber starting → {relay_url} (channel map: {len(channel_to_key)} entries, "
+        f"write_to_elodin={_we})"
     )
+
+    adj_save_interval = float(
+        config.get("calibration", {}).get("sidecar", {}).get(
+            "adjustments_save_interval_sec", 120.0
+        )
+    )
+    _last_adj_save = time.monotonic()
 
     while True:
         try:
@@ -292,38 +484,83 @@ async def relay_subscriber_task():
                     if ty != 1:  # TABLE = 1
                         continue
 
-                    channel_id = low
                     stype = None
                     raw_val = None
+                    connector_id: Optional[int] = None
+                    packet_ch: Optional[int] = None
 
-                    # Raw PT: [0x20, 0x01..0x0E]
-                    if high == 0x20 and 0x01 <= low <= 0x0E:
-                        raw_val = _parse_raw_adc(payload)
-                        stype = "PT"
-                    # Raw TC: [0x21, 0x01..0x14]
-                    elif high == 0x21 and 0x01 <= low <= 0x14:
-                        raw_val = _parse_raw_adc(payload)
-                        stype = "TC"
-                    # Raw RTD: [0x22, 0x01..0x14]
-                    elif high == 0x22 and 0x01 <= low <= 0x14:
-                        raw_val = _parse_raw_adc(payload)
-                        stype = "RTD"
-                    # Raw LC: [0x23, 0x01..0x14]
-                    elif high == 0x23 and 0x01 <= low <= 0x14:
-                        raw_val = _parse_raw_signed(payload)
-                        stype = "LC"
-
-                    if stype is None or raw_val is None:
+                    dec = decode_board_namespaced_low(low)
+                    if dec is None:
+                        continue
+                    board_slot, connector_id, is_raw = dec
+                    if not is_raw:
                         continue
 
-                    key = channel_to_key.get((stype, channel_id))
-                    if key and key in state.orchestrator.robust:
+                    if high == 0x20:
+                        stype = "PT"
+                        packet_ch = packet_ch_for_board_connector(
+                            "PT", board_slot, connector_id
+                        )
+                        if packet_ch is not None:
+                            raw_val = _parse_pt_raw_for_packet_ch(payload, packet_ch)
+                    elif high == 0x21:
+                        stype = "TC"
+                        packet_ch = packet_ch_for_board_connector(
+                            "TC", board_slot, connector_id
+                        )
+                        if packet_ch is not None:
+                            raw_val = _parse_int32_at_12(payload)
+                    elif high == 0x22:
+                        stype = "RTD"
+                        packet_ch = packet_ch_for_board_connector(
+                            "RTD", board_slot, connector_id
+                        )
+                        if packet_ch is not None:
+                            raw_val = _parse_int32_at_12(payload)
+                    elif high == 0x23:
+                        stype = "LC"
+                        packet_ch = packet_ch_for_board_connector(
+                            "LC", board_slot, connector_id
+                        )
+                        if packet_ch is not None:
+                            raw_val = _parse_raw_signed(payload)
+
+                    if (
+                        stype is None
+                        or raw_val is None
+                        or packet_ch is None
+                        or connector_id is None
+                    ):
+                        continue
+
+                    key = channel_to_key.get((stype, packet_ch))
+                    # HP PT and excitation channels use direct conversions, not the RCF
+                    # polynomial. Feeding their raw codes into _online_update would corrupt
+                    # the Bayesian model (the polynomial is calibrated for LP PT voltage-mode).
+                    # Also skip HP PT online update in sim mode (FSW handles those channels).
+                    _is_hp = stype == "PT" and packet_ch in _hp_pt_channels_cache
+                    _is_exc = stype == "PT" and packet_ch in _excitation_channels_cache
+                    if key and key in state.orchestrator.robust and not _is_hp and not _is_exc:
                         state.orchestrator._online_update(key, float(raw_val))
 
-                    # Compute calibrated and write to Elodin DB
                     _process_raw_and_write_calibrated(
-                        stype, channel_id, raw_val, writer, channel_to_key
+                        stype,
+                        packet_ch,
+                        raw_val,
+                        writer,
+                        channel_to_key,
+                        connector_id=connector_id,
+                        raw_packet_low=low,
                     )
+
+                    # Periodic auto-save of RLS-learned calibration to adjustments.json
+                    _now = time.monotonic()
+                    if _now - _last_adj_save >= adj_save_interval:
+                        _last_adj_save = _now
+                        try:
+                            _auto_save_adjustments()
+                        except Exception as _se:
+                            logger.warning(f"[Relay] adjustments auto-save failed: {_se}")
 
         except Exception as e:
             logger.warning(f"[Relay] Disconnected ({e}), retrying in 5s...")
@@ -524,6 +761,11 @@ class CalibrationHTTPRequestHandler(BaseHTTPRequestHandler):
                     ),  # Paper: human=10⁻⁶ σ²
                 )
                 res = state.orchestrator.robust[key].add_calibration_point(pt)
+                # For near-zero reference points apply a direct offset correction immediately
+                # (Bayesian update with one point converges slowly against the prior).
+                if abs(ref_value) < 50:
+                    _apply_direct_offset_correction(key, float(adc), float(ref_value))
+                    _reset_ema_for_packet_channels([ch])
                 # Paper: zero-point propagation — when |p|<10 PSI, add (v_k,0,0.01) for all k≠j
                 if abs(ref_value) < 10:
                     state.orchestrator.propagate_zero_point(key, sensor_type)
@@ -554,22 +796,29 @@ class CalibrationHTTPRequestHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/zero_all":
             channels = req.get("channels", [])
-            state.orchestrator.clear_calibration()
             channel_to_key = build_channel_to_orchestrator_key()
-            # Paper: zero-point propagation — add (v_k, 0, e_k, 0.01) for each PT
+            corrected_packet_chs = []
+            # Direct offset correction: shift theta_mean[0] so each sensor reads target_psi
+            # at its current ADC reading. This preserves the learned slope and is instantaneous.
+            # (Previously called clear_calibration() first which discarded all learned state.)
             for ch_data in channels:
                 packet_ch = ch_data.get("id")
                 adc = ch_data.get("adc_code")
+                target = float(ch_data.get("target_psi", 0.0))
+                if packet_ch is None or adc is None:
+                    continue
+                # Skip HP PT and excitation channels — those have hardware-level conversions
+                if not _excitation_channels_cache:
+                    _excitation_channels_cache.update(get_excitation_packet_channels())
+                if not _hp_pt_channels_cache:
+                    _hp_pt_channels_cache.update(get_hp_pt_packet_channels())
+                if packet_ch in _hp_pt_channels_cache or packet_ch in _excitation_channels_cache:
+                    continue
                 key = channel_to_key.get(("PT", packet_ch), ("PT", packet_ch))
-                if key in state.orchestrator.robust:
-                    pt = CalibrationPoint(
-                        adc_code=adc,
-                        pressure=0.0,
-                        timestamp=0,
-                        environmental_state=state.env_state,
-                        uncertainty=0.01,  # Paper: propagation uncertainty
-                    )
-                    state.orchestrator.robust[key].add_calibration_point(pt)
+                if _apply_direct_offset_correction(key, float(adc), target):
+                    corrected_packet_chs.append(packet_ch)
+            # Reset EMA so corrected value reaches the GUI immediately
+            _reset_ema_for_packet_channels(corrected_packet_chs)
             state.orchestrator._save_all()
             self.send_response(200)
             self._send_cors_headers()

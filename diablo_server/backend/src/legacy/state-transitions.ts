@@ -6,6 +6,7 @@ import { readFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { SystemState } from '../shared-types.js';
+import { readConfig } from '../routes/config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -64,7 +65,7 @@ export function parseStateTransitionsCSV(csvPath: string): Transition[] {
       const fromStateName = row[0].trim();
       const fromState = CSV_STATE_MAP[fromStateName];
 
-      if (!fromState && fromStateName !== '') {
+      if (fromState === undefined && fromStateName !== '') {
         continue; // Skip unknown states
       }
 
@@ -77,7 +78,7 @@ export function parseStateTransitionsCSV(csvPath: string): Transition[] {
           if (!toStateName) continue;
           const toState = CSV_STATE_MAP[toStateName];
 
-          if (toState && fromState) {
+          if (toState !== undefined && fromState !== undefined) {
             transitions.push({ from: fromState, to: toState });
           }
         }
@@ -91,14 +92,30 @@ export function parseStateTransitionsCSV(csvPath: string): Transition[] {
   }
 }
 
-export function getStateTransitions(): Transition[] {
-  // Try to find the CSV file
-  const possiblePaths = [
+function buildTransitionsCSVSearchPaths(): string[] {
+  const paths: string[] = [];
+  try {
+    const config = readConfig();
+    const rel = config.state_machine?.transitions_csv;
+    if (typeof rel === 'string' && rel.length > 0) {
+      paths.push(join(__dirname, '..', '..', '..', '..', rel));
+      paths.push(join(process.cwd(), '..', '..', rel));
+      paths.push(join(process.cwd(), '..', rel));
+    }
+  } catch {
+    /* fall through to defaults */
+  }
+  paths.push(
     join(process.cwd(), '..', '..', 'external', 'DiabloAvionics', 'test_guis', 'state_transitions.csv'),
     join(process.cwd(), '..', 'external', 'DiabloAvionics', 'test_guis', 'state_transitions.csv'),
     join(__dirname, '..', '..', '..', 'external', 'DiabloAvionics', 'test_guis', 'state_transitions.csv'),
     join(__dirname, '../../../../external/DiabloAvionics/test_guis/state_transitions.csv'),
-  ];
+  );
+  return paths;
+}
+
+export function getStateTransitions(): Transition[] {
+  const possiblePaths = buildTransitionsCSVSearchPaths();
 
   for (const path of possiblePaths) {
     try {

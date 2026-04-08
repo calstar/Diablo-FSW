@@ -35,18 +35,10 @@
 namespace {
 std::atomic<bool> g_running{true};
 
-uint32_t actuator_packet_timestamp_ms() {
-    return static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
-                                     std::chrono::steady_clock::now().time_since_epoch())
-                                     .count() &
-                                 0xFFFFFFFF);
-}
-
 std::vector<uint8_t> build_actuator_command_udp_packet(
     const std::vector<Diablo::ActuatorCommand>& commands) {
     uint8_t buf[512];
-    size_t len = Diablo::create_actuator_command_packet(commands, actuator_packet_timestamp_ms(),
-                                                        buf, sizeof(buf));
+    size_t len = Diablo::create_actuator_command_packet(commands, buf, sizeof(buf));
     if (len == 0)
         return {};
     return std::vector<uint8_t>(buf, buf + len);
@@ -713,8 +705,8 @@ int main(int argc, char* argv[]) {
 
     while (g_running) {
         struct timeval tv;
-        tv.tv_sec = 1;
-        tv.tv_usec = 0;
+        tv.tv_sec = 0;
+        tv.tv_usec = 10000;  // 10 ms — wake quickly for low-latency command dispatch
         fd_set rd;
         FD_ZERO(&rd);
         FD_SET(listen_fd, &rd);
@@ -766,6 +758,9 @@ int main(int argc, char* argv[]) {
                 }
             }
         }
+        // Reply before close so Node.js resolves ok=true and keeps the optimistic UI update.
+        const char* reply = handled ? "OK\n" : "ERR\n";
+        write(client, reply, strlen(reply));
         close(client);
     }
 

@@ -197,3 +197,6 @@ $RECYCLE.BIN/
 config_local.toml
 *_local.toml
 .cache/
+
+# Next.js build artifacts
+**/.next/

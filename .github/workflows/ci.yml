@@ -47,9 +47,9 @@ jobs:
 
     - name: Check code formatting
       run: |
-        chmod +x ./format.sh
-        if ! ./format.sh --check; then
-          echo "::error::Code formatting check failed. Run './format.sh' to fix."
+        chmod +x ./scripts/format.sh
+        if ! ./scripts/format.sh --check; then
+          echo "::error::Code formatting check failed. Run './scripts/format.sh' to fix."
           exit 1
         fi
       continue-on-error: false
@@ -68,7 +68,7 @@ jobs:
       with:
         node-version: '20.x'
         cache: 'npm'
-        cache-dependency-path: web-gui/frontend/package-lock.json
+        cache-dependency-path: diablo_server/frontend/package-lock.json
 
     # API routes import ../backend/src/* which uses @iarna/toml; install backend so resolution + alias work in next build.
     - name: Install backend dependencies
@@ -76,15 +76,15 @@ jobs:
       run: npm ci || npm install
 
     - name: Install frontend dependencies
-      working-directory: web-gui/frontend
+      working-directory: diablo_server/frontend
       run: npm ci || npm install
 
     - name: Run frontend unit tests
-      working-directory: web-gui/frontend
+      working-directory: diablo_server/frontend
       run: npm run test
 
     - name: Verify Next.js build
-      working-directory: web-gui/frontend
+      working-directory: diablo_server/frontend
       run: npm run test:build
 
   # Build with multiple compilers (Release only)
@@ -138,7 +138,7 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ~/.ccache
-        key: ${{ runner.os }}-ccache-${{ matrix.compiler }}-${{ hashFiles('CMakeLists.txt', 'FSW/CMakeLists.txt', 'archive/legacy/utl/**/*.cpp', 'archive/legacy/utl/**/*.hpp', 'daq_comms/**/*.cpp', 'daq_comms/**/*.hpp', 'FSW/**/*.cpp', 'FSW/**/*.hpp') }}
+        key: ${{ runner.os }}-ccache-${{ matrix.compiler }}-${{ hashFiles('CMakeLists.txt', 'diablo_server/CMakeLists.txt', 'archive/legacy/utl/**/*.cpp', 'archive/legacy/utl/**/*.hpp', 'diablo_server/**/*.cpp', 'diablo_server/**/*.hpp') }}
         restore-keys: |
           ${{ runner.os }}-ccache-${{ matrix.compiler }}-
 
@@ -179,7 +179,7 @@ jobs:
       run: |
         cd ${{ env.BUILD_DIR }}
         echo "Checking for built executables..."
-        find . -type f -executable -name "*example*" -o -name "*test*" | head -10 || true
+        find bin/ -type f -executable | head -10 || true
 
     - name: Upload build artifacts
       if: matrix.compiler == 'gcc-12'
@@ -187,9 +187,9 @@ jobs:
       with:
         name: build-artifacts-${{ matrix.compiler }}-Release
         path: |
-          ${{ env.BUILD_DIR }}/**/*.so
-          ${{ env.BUILD_DIR }}/**/daq_bridge
-          ${{ env.BUILD_DIR }}/**/test_fsw_simulator
+          ${{ env.BUILD_DIR }}/lib/*.so
+          ${{ env.BUILD_DIR }}/bin/daq_bridge
+          ${{ env.BUILD_DIR }}/bin/sequencer_service
         retention-days: 7
 
   # Static analysis
@@ -225,7 +225,7 @@ jobs:
           --error-exitcode=1 \
           --xml --xml-version=2 \
           --output-file=cppcheck-report.xml \
-          FSW/ archive/legacy/utl/ daq_comms/ || true
+          diablo_server/ archive/legacy/utl/ || true
 
     - name: Upload cppcheck results
       uses: actions/upload-artifact@v4
@@ -237,7 +237,7 @@ jobs:
     - name: Run clang-tidy
       run: |
         # Only run on a subset to avoid timeout
-        find FSW archive/legacy/utl daq_comms -name "*.cpp" -o -name "*.hpp" | head -20 | \
+        find diablo_server archive/legacy/utl -name "*.cpp" -o -name "*.hpp" | head -20 | \
         xargs -I {} clang-tidy {} \
           -p ${{ env.BUILD_DIR }} \
           -- -std=c++${{ env.CXX_STANDARD }} || true
@@ -261,7 +261,7 @@ jobs:
           --include="*.hpp" \
           --include="*.c" \
           --include="*.h" \
-          FSW/ archive/legacy/utl/ daq_comms/ || true)
+          diablo_server/ archive/legacy/utl/ || true)
         if [ -n "$TODOS" ]; then
           echo "::warning::Found TODO/FIXME/HACK comments:"
           echo "$TODOS"
@@ -280,8 +280,7 @@ jobs:
     - name: Check for missing includes
       run: |
         echo "Checking for common include issues..."
-        # Check for missing standard library includes
-        if grep -r "#include <iostream>" --include="*.cpp" --include="*.hpp" FSW/ archive/legacy/utl/ daq_comms/ | \
+        if grep -r "#include <iostream>" --include="*.cpp" --include="*.hpp" diablo_server/ archive/legacy/utl/ | \
            grep -v "#include <iostream>" | head -5; then
           echo "::warning::Potential missing includes detected"
         fi
@@ -339,7 +338,7 @@ jobs:
           --include="*.hpp" \
           --include="*.py" \
           --include="*.sh" \
-          FSW/ archive/legacy/utl/ daq_comms/ scripts/ || true)
+          diablo_server/ archive/legacy/utl/ scripts/ || true)
         if [ -n "$SECRETS" ]; then
           echo "::warning::Potential hardcoded secrets found:"
           echo "$SECRETS"
@@ -353,7 +352,7 @@ jobs:
         UNSAFE=$(grep -rE "\b(strcpy|sprintf|gets|scanf|strcat)\s*\(" \
           --include="*.cpp" \
           --include="*.hpp" \
-          FSW/ archive/legacy/utl/ daq_comms/ || true)
+          diablo_server/ archive/legacy/utl/ || true)
         if [ -n "$UNSAFE" ]; then
           echo "::warning::Potentially unsafe C functions found:"
           echo "$UNSAFE"
@@ -419,11 +418,11 @@ jobs:
     - name: Run Sequencer Elodin Unit Test
       run: |
         cd ${{ env.BUILD_DIR }}
-        ./FSW/test_sequencer_elodin
+        ./bin/test_sequencer_elodin
 
     - name: Run Python smoke tests (allowlist only)
       run: |
-        if [ -d "scripts/test" ]; then
+        if [ -d "test" ]; then
           echo "Running allowlisted Python smoke tests..."
           # Keep this list intentionally small and non-interactive.
           # Add paths here only for deterministic, CI-safe scripts.
@@ -447,8 +446,8 @@ jobs:
 
     - name: Run integration tests
       run: |
-        if [ -f "test_system.sh" ]; then
-          chmod +x test_system.sh
+        if [ -f "test/test_system.sh" ]; then
+          chmod +x test/test_system.sh
           # Only run quick smoke tests in CI
           echo "Running smoke tests..."
         fi
@@ -496,7 +495,7 @@ jobs:
       with:
         node-version: '20.x'
 
-    - name: Build C++ binaries (daq_bridge, fake_packet_generator)
+    - name: Build C++ binaries
       env:
         CC: gcc-12
         CXX: g++-12
@@ -510,7 +509,7 @@ jobs:
 
     - name: Install backend dependencies
       run: |
-        cd web-gui/backend && npm install
+        cd diablo_server/backend && npm install
 
     - name: Install Python dependencies
       run: |
@@ -518,7 +517,7 @@ jobs:
 
     - name: Run integration test
       run: |
-        bash scripts/test/test_integration.sh
+        bash test/test_integration.sh
 
   # Build summary
   build-summary:

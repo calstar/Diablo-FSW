@@ -178,11 +178,11 @@ function buildVTableStreamSubscriptionList(): Array<[number, number]> {
         [0x50, 0x60], [0x50, 0x61], [0x50, 0x62], [0x50, 0x63], [0x50, 0x64], [0x50, 0x65], [0x50, 0x66],
     ].forEach(([h, l]) => addUnique(h, l));
 
-    // Heartbeats [0x10, board_id] and self-test [0x60, board_id] use the low byte as config
-    // board_id (often 21, 60, 72, …). Subscribe 1..255 so Elodin forwards streams for all boards.
+    // Heartbeats [0x10, board_id] use the low byte as config board_id.
+    // Self-test uses [0x60+sensor_id, board_id] — one VTable per sensor per board.
     for (let i = 1; i <= 255; i++) {
         addUnique(0x10, i);
-        addUnique(0x60, i);
+        for (let s = 0x60; s <= 0x6F; s++) addUnique(s, i);
     }
 
     addUnique(0x46, 0x00);

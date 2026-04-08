@@ -366,9 +366,15 @@ bool DatabaseConfig::register_heartbeat_tables(ElodinClient& client,
     return registered > 0;
 }
 
-static bool register_self_test_vtable(ElodinClient& client, uint8_t board_id) {
+// Per-sensor self-test VTables: [0x60 + sensor_id, board_id].
+// Each sensor result gets its own VTable so Elodin VTableStream delivers every
+// result individually (a shared table only delivers the last-written row).
+static constexpr uint8_t SELF_TEST_HIGH_BASE = 0x60;
+static constexpr uint8_t SELF_TEST_MAX_SENSOR = 15;
+
+static bool register_self_test_vtable(ElodinClient& client, uint8_t board_id, uint8_t sensor_id) {
     std::string entity = "SELF_TEST.BOARD_" + std::to_string(board_id);
-    std::string prefix = entity + ".";
+    std::string prefix = entity + ".s" + std::to_string(sensor_id) + ".";
 
     auto vt = builder::vtable({
         raw_field(0, 8, schema(PrimType::U64(), {}, component(prefix + "timestamp_ns"))),
@@ -376,8 +382,9 @@ static bool register_self_test_vtable(ElodinClient& client, uint8_t board_id) {
         raw_field(9, 1, schema(PrimType::U8(), {}, component(prefix + "result"))),
     });
 
-    uint64_t entity_id = 0x6000 + board_id;
-    if (!send_msg(client, VTableMsg{.id = {0x60, board_id}, .vtable = vt}))
+    uint8_t high = SELF_TEST_HIGH_BASE + sensor_id;
+    uint64_t entity_id = (static_cast<uint64_t>(high) << 8) | board_id;
+    if (!send_msg(client, VTableMsg{.id = {high, board_id}, .vtable = vt}))
         return false;
 
     send_msg(client, set_component_name(prefix + "timestamp_ns"));
@@ -390,11 +397,12 @@ static bool register_self_test_vtable(ElodinClient& client, uint8_t board_id) {
 bool DatabaseConfig::register_self_test_tables(ElodinClient& client,
                                                const std::vector<uint8_t>& board_ids) {
     std::cout << "[DatabaseConfig] Registering SELF_TEST VTables (" << board_ids.size()
-              << " boards)..." << std::endl;
+              << " boards, sensors 0-" << (int)SELF_TEST_MAX_SENSOR << ")..." << std::endl;
     int registered = 0;
     for (uint8_t board_id : board_ids) {
-        if (register_self_test_vtable(client, board_id)) {
-            registered++;
+        for (uint8_t s = 0; s <= SELF_TEST_MAX_SENSOR; ++s) {
+            if (register_self_test_vtable(client, board_id, s))
+                registered++;
         }
     }
     std::cout << "[DatabaseConfig] ✅ Registered " << registered << " SELF_TEST VTables"

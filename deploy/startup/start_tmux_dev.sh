@@ -114,6 +114,17 @@ mkdir -p /tmp/gui_logs
 rm -f /tmp/gui_logs/*.log
 OTA_CMD_PORT="${OTA_SERVICE_CMD_PORT:-9997}"
 
+# When USE_SIM=1, remap board IPs from 192.168.2.x (real hardware subnet) to
+# 127.0.0.x (loopback — the full /8 is routable on Linux). This lets the board
+# simulator bind to the config IPs and config_broadcast_service actually reach them.
+CONFIG_FILE="config/config.toml"
+if [ "${USE_SIM:-0}" = "1" ]; then
+  CONFIG_FILE="/tmp/gui_logs/sim_config.toml"
+  sed 's/192\.168\.2\./127.0.0./g' "$PROJECT/config/config.toml" > "$CONFIG_FILE"
+  echo "  📝 Sim config: board IPs remapped 192.168.2.x → 127.0.0.x"
+  echo "     $CONFIG_FILE"
+fi
+
 OTA_BIN="$PROJECT/build/bin/ota_service"
 if [ ! -x "$OTA_BIN" ]; then
   OTA_BIN="$PROJECT/build/bin/ota_service"
@@ -124,12 +135,6 @@ pkill -f "ota_service" 2>/dev/null || true
 # Replaces fixed sleep delays so services start as soon as the DB is ready.
 WAIT_FOR_ELODIN='echo "  ⏳ Waiting for Elodin DB (port 2240)..." && for i in $(seq 1 30); do (echo >/dev/tcp/127.0.0.1/2240) 2>/dev/null && break; sleep 1; done'
 
-# wait_for_backend: poll until the backend WS port is accepting connections.
-# The board simulator must start AFTER the backend has subscribed to Elodin VTableStreams,
-# otherwise self-test packets (one-shot during SETUP) are written to Elodin but never
-# forwarded to the backend — the browser never sees self-test results.
-WAIT_FOR_BACKEND='echo "  ⏳ Waiting for backend WS (port '"$THIN_WS_PORT"')..." && for i in $(seq 1 40); do (echo >/dev/tcp/127.0.0.1/'"$THIN_WS_PORT"') 2>/dev/null && break; sleep 1; done && echo "  ✅ Backend ready"'
-
 # Publisher: writes UDP sensor data → Elodin DB. Without this, nothing is written to the DB.
 DAQ_BIN="$PROJECT/build/bin/daq_bridge"
 if [ ! -x "$DAQ_BIN" ]; then
@@ -137,7 +142,7 @@ if [ ! -x "$DAQ_BIN" ]; then
 fi
 # DAQ must wait for Elodin DB to be ready.
 CMD_LOG_DAQ="/tmp/gui_logs/daq.log"
-CMD_DAQ='printf "\n  ══ DAQ BRIDGE (writes to Elodin — UDP from config → DB) ══\n\n" && '"$WAIT_FOR_ELODIN"' && cd '"$PROJECT"' && exec '"$DAQ_BIN"' config/config.toml 2>&1 | tee '"$CMD_LOG_DAQ"
+CMD_DAQ='printf "\n  ══ DAQ BRIDGE (writes to Elodin — UDP from config → DB) ══\n\n" && '"$WAIT_FOR_ELODIN"' && cd '"$PROJECT"' && exec '"$DAQ_BIN"' '"$CONFIG_FILE"' 2>&1 | tee '"$CMD_LOG_DAQ"
 
 # Controller Service: Reads CALIBRATED DB → UDP out + Diagnostics DB
 CTRL_BIN="$PROJECT/build/bin/controller_service"
@@ -145,7 +150,7 @@ if [ ! -x "$CTRL_BIN" ]; then
   CTRL_BIN="$PROJECT/build/bin/controller_service"
 fi
 CTRL_LUT="${LUT_PATH:-$PROJECT/output/lut/controller_policy_fsw.bin}"
-CTRL_OPTS="--config config/config.toml --elodin-host 127.0.0.1"
+CTRL_OPTS="--config $CONFIG_FILE --elodin-host 127.0.0.1"
 [ -f "$CTRL_LUT" ] && CTRL_OPTS="$CTRL_OPTS --lut-path $CTRL_LUT"
 CMD_LOG_CTRL="/tmp/gui_logs/controller.log"
 CMD_CTRL='printf "\n  ══ CONTROLLER SERVICE (DB Calibrated → Actuators) ══\n\n" && '"$WAIT_FOR_ELODIN"' && cd '"$PROJECT"' && exec '"$CTRL_BIN"' '"$CTRL_OPTS"' 2>&1 | tee '"$CMD_LOG_CTRL"
@@ -157,7 +162,7 @@ if [ ! -x "$SEQ_BIN" ]; then
 fi
 if [ -x "$SEQ_BIN" ]; then
   CMD_LOG_SEQUENCER="/tmp/gui_logs/sequencer.log"
-  CMD_SEQUENCER='printf "\n  ══ SEQUENCER SERVICE (TCP :9998 — TRANSITION / ACTUATOR / …) ══\n\n" && '"$WAIT_FOR_ELODIN"' && cd '"$PROJECT"' && exec '"$SEQ_BIN"' --config config/config.toml --port 9998 2>&1 | tee '"$CMD_LOG_SEQUENCER"
+  CMD_SEQUENCER='printf "\n  ══ SEQUENCER SERVICE (TCP :9998 — TRANSITION / ACTUATOR / …) ══\n\n" && '"$WAIT_FOR_ELODIN"' && cd '"$PROJECT"' && exec '"$SEQ_BIN"' --config '"$CONFIG_FILE"' --port 9998 2>&1 | tee '"$CMD_LOG_SEQUENCER"
 else
   CMD_SEQUENCER='printf "\n  ❌ sequencer_service not found. Build: cd build && cmake .. && make sequencer_service\n\n" && sleep infinity'
 fi
@@ -168,6 +173,13 @@ CMD_DB='printf "\n  ══ ELODIN DB — :2240 (raw data lands here only) ══
 # Thin backend connects directly to Elodin DB (no relay needed)
 THIN_WS_PORT="${THIN_WS_PORT:-8081}"
 THIN_ACT_PORT="${THIN_ACTUATOR_SERVICE_PORT:-9998}"
+
+# wait_for_backend: poll until the backend WS port is accepting connections.
+# The board simulator must start AFTER the backend has subscribed to Elodin VTableStreams,
+# otherwise self-test packets (one-shot during SETUP) are written to Elodin but never
+# forwarded to the backend — the browser never sees self-test results.
+WAIT_FOR_BACKEND='echo "  ⏳ Waiting for backend WS (port '"$THIN_WS_PORT"')..." && for i in $(seq 1 40); do (echo >/dev/tcp/127.0.0.1/'"$THIN_WS_PORT"') 2>/dev/null && break; sleep 1; done && echo "  ✅ Backend ready"'
+
 CMD_LOG_BACKEND="/tmp/gui_logs/backend.log"
 CMD_WEB_BACKEND='printf "\n  ══ BACKEND — HTTP+WS :'"${THIN_WS_PORT}"' (server.ts → Elodin DB :2240) ══\n\n" && '"$WAIT_FOR_ELODIN"' && cd '"$PROJECT"'/diablo_server/backend && WS_PORT='"$THIN_WS_PORT"' ELODIN_HOST=127.0.0.1 ELODIN_PORT=2240 ACTUATOR_SERVICE_PORT='"$THIN_ACT_PORT"' npx tsx src/server.ts 2>&1 | tee '"$CMD_LOG_BACKEND"
 
@@ -186,7 +198,7 @@ fi
 # established before boards send one-shot self-test packets during SETUP.
 if [ "${USE_SIM:-0}" = "1" ]; then
   CMD_LOG_SIM="/tmp/gui_logs/sim.log"
-  CMD_SIM='printf "\n  ══ BOARD SIMULATOR — UDP → :5006 (All Boards) ══\n\n" && '"$WAIT_FOR_BACKEND"' && cd '"$PROJECT"' && exec '"$PYTHON_BIN"' sim/board_simulator.py --config config/config.toml --target 127.0.0.1 --port 5006 2>&1 | tee '"$CMD_LOG_SIM"
+  CMD_SIM='printf "\n  ══ BOARD SIMULATOR — UDP → :5006 (All Boards) ══\n\n" && '"$WAIT_FOR_BACKEND"' && cd '"$PROJECT"' && exec '"$PYTHON_BIN"' sim/board_simulator.py --config '"$CONFIG_FILE"' --target 127.0.0.1 --port 5006 2>&1 | tee '"$CMD_LOG_SIM"
 else
   CMD_SIM='printf "\n  ══ BOARD SIMULATOR — DISABLED (USE_SIM=1 to enable) ══\n\n" && sleep infinity'
 fi
@@ -196,19 +208,19 @@ HEARTBEAT_BIN="$PROJECT/build/bin/heartbeat_service"
 HB_BACKEND_URL="http://127.0.0.1:${THIN_WS_PORT}"
 # Python heartbeat polls /api/engine_state; C++ reads sequencer state from Elodin (no backend URL).
 CMD_LOG_HB="/tmp/gui_logs/heartbeat.log"
-CMD_HEARTBEAT='printf "\n  ══ HEARTBEAT SERVICE — SERVER_HEARTBEAT to boards ══\n\n" && sleep 6 && cd '"$PROJECT"' && exec '"$PYTHON_BIN"' archive/legacy/python-services/heartbeat_service.py --config config/config.toml --backend-url '"$HB_BACKEND_URL"' 2>&1 | tee '"$CMD_LOG_HB"
-[ -x "$HEARTBEAT_BIN" ] && CMD_HEARTBEAT='printf "\n  ══ HEARTBEAT SERVICE (C++) — SERVER_HEARTBEAT to boards ══\n\n" && sleep 6 && cd '"$PROJECT"' && exec '"$HEARTBEAT_BIN"' --config config/config.toml 2>&1 | tee '"$CMD_LOG_HB"
+CMD_HEARTBEAT='printf "\n  ══ HEARTBEAT SERVICE — SERVER_HEARTBEAT to boards ══\n\n" && sleep 6 && cd '"$PROJECT"' && exec '"$PYTHON_BIN"' archive/legacy/python-services/heartbeat_service.py --config '"$CONFIG_FILE"' --backend-url '"$HB_BACKEND_URL"' 2>&1 | tee '"$CMD_LOG_HB"
+[ -x "$HEARTBEAT_BIN" ] && CMD_HEARTBEAT='printf "\n  ══ HEARTBEAT SERVICE (C++) — SERVER_HEARTBEAT to boards ══\n\n" && sleep 6 && cd '"$PROJECT"' && exec '"$HEARTBEAT_BIN"' --config '"$CONFIG_FILE"' 2>&1 | tee '"$CMD_LOG_HB"
 # Config broadcast service: C++ preferred (flight-ready), Python fallback
 CONFIG_BIN="$PROJECT/build/bin/config_broadcast_service"
 [ ! -x "$CONFIG_BIN" ] && CONFIG_BIN="$PROJECT/build/bin/config_broadcast_service"
 CMD_LOG_CONFIG="/tmp/gui_logs/config.log"
-CMD_CONFIG='printf "\n  ══ CONFIG BROADCAST SERVICE — config packets to boards ══\n\n" && sleep 6 && cd '"$PROJECT"' && exec '"$PYTHON_BIN"' archive/legacy/python-services/config_broadcast_service.py --config config/config.toml 2>&1 | tee '"$CMD_LOG_CONFIG"
-[ -x "$CONFIG_BIN" ] && CMD_CONFIG='printf "\n  ══ CONFIG BROADCAST SERVICE (C++) — config packets to boards ══\n\n" && sleep 6 && cd '"$PROJECT"' && exec '"$CONFIG_BIN"' --config config/config.toml 2>&1 | tee '"$CMD_LOG_CONFIG"
+CMD_CONFIG='printf "\n  ══ CONFIG BROADCAST SERVICE — config packets to boards ══\n\n" && sleep 6 && cd '"$PROJECT"' && exec '"$PYTHON_BIN"' archive/legacy/python-services/config_broadcast_service.py --config '"$CONFIG_FILE"' 2>&1 | tee '"$CMD_LOG_CONFIG"
+[ -x "$CONFIG_BIN" ] && CMD_CONFIG='printf "\n  ══ CONFIG BROADCAST SERVICE (C++) — config packets to boards ══\n\n" && sleep 6 && cd '"$PROJECT"' && exec '"$CONFIG_BIN"' --config '"$CONFIG_FILE"' 2>&1 | tee '"$CMD_LOG_CONFIG"
 # Calibration service: reads raw DB PT/TC packets, publishes calibrated ones
 CALIB_BIN="$PROJECT/build/bin/calibration_service"
 [ ! -x "$CALIB_BIN" ] && CALIB_BIN="$PROJECT/build/bin/calibration_service"
 CMD_LOG_CALIBRATION="/tmp/gui_logs/calibration.log"
-CMD_CALIBRATION='printf "\n  ══ CALIBRATION SERVICE — DB Raw → DB Calibrated ══\n\n" && '"$WAIT_FOR_ELODIN"' && cd '"$PROJECT"' && exec '"$CALIB_BIN"' --config config/config.toml 2>&1 | tee '"$CMD_LOG_CALIBRATION"
+CMD_CALIBRATION='printf "\n  ══ CALIBRATION SERVICE — DB Raw → DB Calibrated ══\n\n" && '"$WAIT_FOR_ELODIN"' && cd '"$PROJECT"' && exec '"$CALIB_BIN"' --config '"$CONFIG_FILE"' 2>&1 | tee '"$CMD_LOG_CALIBRATION"
 
 # Split the rightmost (max index) pane each time so pane creation order is 0..11 as listed above.
 # Re-tile after each split so widths stay usable. IMPORTANT: pass one shell string to tmux (like
@@ -252,26 +264,26 @@ launch_background() {
   echo " ready"
 
   # DAQ bridge
-  nohup bash -c "cd '$PROJECT' && exec '$DAQ_BIN' config/config.toml" >> "$LOGDIR/daq.log" 2>&1 &
+  nohup bash -c "cd '$PROJECT' && exec '$DAQ_BIN' '$CONFIG_FILE'" >> "$LOGDIR/daq.log" 2>&1 &
   echo "    DAQ bridge:   PID $! → $LOGDIR/daq.log"
 
   # Calibration service
-  nohup bash -c "cd '$PROJECT' && exec '$CALIB_BIN' --config config/config.toml" >> "$LOGDIR/calibration.log" 2>&1 &
+  nohup bash -c "cd '$PROJECT' && exec '$CALIB_BIN' --config '$CONFIG_FILE'" >> "$LOGDIR/calibration.log" 2>&1 &
   echo "    Calibration:  PID $! → $LOGDIR/calibration.log"
 
   # Sequencer
   if [ -x "$SEQ_BIN" ]; then
-    nohup bash -c "cd '$PROJECT' && exec '$SEQ_BIN' --config config/config.toml --port 9998" >> "$LOGDIR/sequencer.log" 2>&1 &
+    nohup bash -c "cd '$PROJECT' && exec '$SEQ_BIN' --config '$CONFIG_FILE' --port 9998" >> "$LOGDIR/sequencer.log" 2>&1 &
     echo "    Sequencer:    PID $! → $LOGDIR/sequencer.log"
   fi
 
   # Heartbeat
-  nohup bash -c "cd '$PROJECT' && exec '$PYTHON_BIN' archive/legacy/python-services/heartbeat_service.py --config config/config.toml" >> "$LOGDIR/heartbeat.log" 2>&1 &
+  nohup bash -c "cd '$PROJECT' && exec '$PYTHON_BIN' archive/legacy/python-services/heartbeat_service.py --config '$CONFIG_FILE'" >> "$LOGDIR/heartbeat.log" 2>&1 &
   echo "    Heartbeat:    PID $! → $LOGDIR/heartbeat.log"
 
   # Config broadcast
   if [ -x "$CONFIG_BIN" ]; then
-    nohup bash -c "cd '$PROJECT' && exec '$CONFIG_BIN' --config config/config.toml" >> "$LOGDIR/config.log" 2>&1 &
+    nohup bash -c "cd '$PROJECT' && exec '$CONFIG_BIN' --config '$CONFIG_FILE'" >> "$LOGDIR/config.log" 2>&1 &
     echo "    Config:       PID $! → $LOGDIR/config.log"
   fi
 
@@ -289,6 +301,19 @@ launch_background() {
   # Frontend
   nohup bash -c "cd '$PROJECT/diablo_server/frontend' && exec npm run dev" >> "$LOGDIR/frontend.log" 2>&1 &
   echo "    Frontend:     PID $! → $LOGDIR/frontend.log"
+
+  # Simulator LAST (if USE_SIM=1) — must wait for backend so self-test isn't missed
+  if [ "${USE_SIM:-0}" = "1" ]; then
+    echo -n "    Waiting for backend WS (port ${THIN_WS_PORT})..."
+    for i in $(seq 1 40); do
+      (echo >/dev/tcp/127.0.0.1/${THIN_WS_PORT}) 2>/dev/null && break
+      sleep 1
+      echo -n "."
+    done
+    echo " ready"
+    nohup bash -c "cd '$PROJECT' && exec '$PYTHON_BIN' sim/board_simulator.py --config '$CONFIG_FILE'" >> "$LOGDIR/sim.log" 2>&1 &
+    echo "    Simulator:    PID $! → $LOGDIR/sim.log"
+  fi
 
   echo ""
   echo "  ✅ Stack running. Logs: /tmp/gui_logs/"

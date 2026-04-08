@@ -661,9 +661,26 @@ int main(int argc, char* argv[]) {
                 }
 
                 if (board_id != 0) {
-                    std::array<uint8_t, 2> pkt_id = {0x60, board_id};
                     using SelfTestElodinMsg = comms::CommsMessage<uint64_t, uint8_t, uint8_t>;
+
+                    // Each sensor result gets its own VTable [0x60+sensor_id, board_id]
+                    // so Elodin VTableStream delivers every result (shared tables only
+                    // deliver the last-written row to subscribers).
+
+                    // adc_good → sensor_id=0 (TDAC)
+                    {
+                        std::array<uint8_t, 2> pkt_id = {0x60, board_id};
+                        SelfTestElodinMsg msg;
+                        msg.setField<0>(receive_timestamp_ns);
+                        msg.setField<1>(static_cast<uint8_t>(0));
+                        msg.setField<2>(st_packet.adc_good);
+                        elodin_client.publish(pkt_id, msg);
+                    }
+
                     for (const auto& res : st_packet.results) {
+                        if (res.sensor_id == 0) continue;
+                        uint8_t high = static_cast<uint8_t>(0x60 + (res.sensor_id & 0x0F));
+                        std::array<uint8_t, 2> pkt_id = {high, board_id};
                         SelfTestElodinMsg msg;
                         msg.setField<0>(receive_timestamp_ns);
                         msg.setField<1>(res.sensor_id);

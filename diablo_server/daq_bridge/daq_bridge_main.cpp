@@ -235,13 +235,13 @@ static uint8_t config_board_type_to_wire_u8(BoardType t) {
 
 /**
  * Match config.toml board_id to the packet source IP. board_simulator uses 127.0.0.2, 127.0.0.3, …
- * while [boards.*] lists 192.168.2.* — the main sensor path used this mapping for Elodin packet IDs.
- * Heartbeats must use the same mapping or {0x10, low} uses the firmware slot byte (1–8) instead of
- * config board_id (e.g. 21, 12), and the thin backend boardsStatus / Boards UI show PT/ACT disconnected.
+ * while [boards.*] lists 192.168.2.* — the main sensor path used this mapping for Elodin packet
+ * IDs. Heartbeats must use the same mapping or {0x10, low} uses the firmware slot byte (1–8)
+ * instead of config board_id (e.g. 21, 12), and the thin backend boardsStatus / Boards UI show
+ * PT/ACT disconnected.
  */
 static const BoardConfig* resolve_board_config_by_source_ip(
-    const std::string& source_ip,
-    const std::map<std::string, BoardConfig>& board_map,
+    const std::string& source_ip, const std::map<std::string, BoardConfig>& board_map,
     const BoardOrder& board_order) {
     auto it = board_map.find(source_ip);
     if (it != board_map.end() && it->second.enabled)
@@ -537,8 +537,8 @@ int main(int argc, char* argv[]) {
                                                          hb_body)) {
                     uint8_t board_type_wire = fsw::daq_wire::kUnknown;
                     int elodin_board_id = -1;
-                    if (const BoardConfig* hb_cfg =
-                            resolve_board_config_by_source_ip(hb->source_ip, board_map, board_order)) {
+                    if (const BoardConfig* hb_cfg = resolve_board_config_by_source_ip(
+                            hb->source_ip, board_map, board_order)) {
                         board_type_wire = config_board_type_to_wire_u8(hb_cfg->type);
                         if (hb_cfg->board_id >= 0)
                             elodin_board_id = hb_cfg->board_id;

@@ -8,14 +8,8 @@ import { startDataCache } from '@/lib/data-cache';
 import StateMachineDiagram from '@/components/controls/StateMachineDiagram';
 import ActuatorControlByName from '@/components/controls/ActuatorControlByName';
 import TimeSeriesPlot from '@/components/plots/TimeSeriesPlot';
-import { PRESSURE_SENSORS, getEntityColor } from '@/lib/sensor-colors';
-
-
-const FALLBACK_PRESSURE_SENSORS_PLOT = PRESSURE_SENSORS.map((s) => ({
-  label: s.label.replace('Upstream', 'Up').replace('Downstream', 'Down').replace('Regulated', 'Reg'),
-  entity: s.entity,
-  color: s.color,
-}));
+import type { SensorConfig } from '@/lib/sensor-config';
+import { buildPressurePlotSeriesFromSensorList, type PressurePlotSeries } from '@/lib/pressure-bar-defs';
 
 // Time window options for history plotting
 const TIME_WINDOWS = [
@@ -30,7 +24,8 @@ export default function UnifiedDashboard() {
   const ws = getWebSocketClient();
   const [timeWindow, setTimeWindow] = useState(60);
   const [actuatorsFromConfig, setActuatorsFromConfig] = useState<{ name: string; channel: number; entity: string; boardId?: number }[]>([]);
-  const [pressureSensorsPlot, setPressureSensorsPlot] = useState<{ label: string; entity: string; color: string }[]>([]);
+  const [pressureSensorsPlot, setPressureSensorsPlot] = useState<PressurePlotSeries[]>(() =>
+    buildPressurePlotSeriesFromSensorList([]));
 
   const loadActuatorsFromConfig = useCallback(() => {
     fetch(`${getApiBaseUrl()}/api/config`)
@@ -58,28 +53,17 @@ export default function UnifiedDashboard() {
   const loadPressureSensors = useCallback(() => {
     fetch(`${getApiBaseUrl()}/api/sensor-config`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((data: any) => {
-        const sensors = data?.sensors as any[] | undefined;
-        if (!Array.isArray(sensors)) return;
-        const isCalPt = (calEntity: unknown) => {
-          if (typeof calEntity !== 'string') return false;
-          // Two formats we might see from backend:
-          //  - Canonical named entities: "PT_Cal.Fuel_Upstream"
-          //  - Board/channel entities: "PT1_Cal.CH1"
-          return calEntity.startsWith('PT_Cal.') || /^PT\\d+_Cal\\.CH\\d+$/.test(calEntity);
-        };
-
-        const pts = sensors
-          .filter((s) => isCalPt(s?.calEntity))
-          .map((s) => {
-            const role = String(s.role || s.calEntity);
-            const label = role.replace('Upstream', 'Up').replace('Downstream', 'Down').replace('Regulated', 'Reg');
-            const entity = String(s.calEntity);
-            return { label, entity, color: getEntityColor(entity) };
-          });
-        if (pts.length > 0) setPressureSensorsPlot(pts);
+      .then((data: { sensors?: SensorConfig[] } | null) => {
+        const sensors = data?.sensors;
+        if (!Array.isArray(sensors) || sensors.length === 0) {
+          setPressureSensorsPlot(buildPressurePlotSeriesFromSensorList([]));
+          return;
+        }
+        setPressureSensorsPlot(buildPressurePlotSeriesFromSensorList(sensors));
       })
-      .catch(() => { });
+      .catch(() => {
+        setPressureSensorsPlot(buildPressurePlotSeriesFromSensorList([]));
+      });
   }, []);
 
   useEffect(() => {
@@ -99,8 +83,6 @@ export default function UnifiedDashboard() {
   }, [ws, loadActuatorsFromConfig, loadPressureSensors]);
 
   const isFireState = currentState === SystemState.FIRE;
-  const effectivePressureSensorsPlot = pressureSensorsPlot.length > 0 ? pressureSensorsPlot : FALLBACK_PRESSURE_SENSORS_PLOT;
-
   return (
     <main className="h-full w-full bg-background text-text flex flex-col overflow-hidden">
       {/* ── Main content: 3-section split view ─────────────────────────────── */}
@@ -134,10 +116,10 @@ export default function UnifiedDashboard() {
             <div className="flex-1 min-h-0">
               <TimeSeriesPlot
                 title="All Pressure Sensors (PSI)"
-                entities={effectivePressureSensorsPlot.map(s => s.entity)}
-                labels={effectivePressureSensorsPlot.map(s => s.label)}
+                entities={pressureSensorsPlot.map(s => s.entity)}
+                labels={pressureSensorsPlot.map(s => s.label)}
                 component="pressure_psi"
-                colors={effectivePressureSensorsPlot.map(s => s.color)}
+                colors={pressureSensorsPlot.map(s => s.color)}
                 yLabel="Pressure (PSI)"
                 windowSeconds={timeWindow}
               />

@@ -234,7 +234,7 @@ static std::map<BoardType, std::vector<BoardChannels>> load_active_boards(
 
         BoardChannels bc;
         bc.board_id = static_cast<uint8_t>(board_id);
-        bc.board_number = static_cast<uint8_t>(board_id % 10);
+        { int bn = static_cast<int>(board_id % 10); bc.board_number = static_cast<uint8_t>(bn == 0 ? 10 : bn); }
         if (!active_conn.empty()) {
             bc.channels = active_conn;
         } else {
@@ -801,9 +801,14 @@ int main(int argc, char* argv[]) {
             elodin_client.begin_batch();
 
         // Board-namespaced packet IDs: low byte = (board_number-1)*0x10 + local_channel
-        uint8_t board_number =
-            effective_cfg ? static_cast<uint8_t>(effective_cfg->board_id % 10) : 1;
-        uint8_t board_offset = static_cast<uint8_t>((board_number - 1) * 0x20);
+        // Match GUI / sequencer: board_id % 10 == 0 → use slot 10 (boards 10, 20, …)
+        uint8_t board_number = 1;
+        if (effective_cfg) {
+            int bn = static_cast<int>(effective_cfg->board_id % 10);
+            board_number = static_cast<uint8_t>(bn == 0 ? 10 : bn);
+        }
+        uint8_t board_offset =
+            static_cast<uint8_t>((static_cast<unsigned>(board_number) - 1u) * 0x20u);
 
         // Helper lambda: build board-namespaced packet and publish a raw sample
         auto publish_raw_sample = [&](uint8_t type_hi, const auto& sample) {

@@ -14,7 +14,7 @@ namespace elodin {
  * @brief Per-board channel info for board-namespaced entity registration.
  *
  * board_id:     raw board ID from config (e.g. 21, 22, 12, 14)
- * board_number: board_id % 10 (e.g. 1, 2, 2, 4) — used in entity names and packet IDs
+ * board_number: Elodin / daq slot = (board_id % 10) with 0 → 10 (e.g. id 12→2, id 10→10)
  * channels:     local connector IDs (1-10) that are active on this board
  */
 struct BoardChannels {

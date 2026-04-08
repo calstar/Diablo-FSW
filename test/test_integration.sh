@@ -414,12 +414,12 @@ wait_for_port "$TEST_ELODIN_PORT" "Elodin DB" 10 || {
 echo "  ✅ Elodin DB started (PID ${PIDS[-1]})"
 
 # ── Start sequencer_service ──────────────────────────────────────────────────
-# Provides TCP command endpoint on :9998. Both thin and legacy backends forward
+# Provides TCP command endpoint on TEST_SEQUENCER_PORT. Both thin and legacy backends forward
 # state/actuator commands here. Reads Elodin port from the test config.
 
 if [ -n "$SEQ_SVC" ]; then
   echo "⚙️  Starting sequencer_service..."
-  (cd "$REPO_ROOT" && "$SEQ_SVC" --config "$TEST_CONFIG" --port 9998) > "$REPO_ROOT/.tmp/integration_sequencer_$$.log" 2>&1 &
+  (cd "$REPO_ROOT" && "$SEQ_SVC" --config "$TEST_CONFIG" --port "$TEST_SEQUENCER_PORT") > "$REPO_ROOT/.tmp/integration_sequencer_$$.log" 2>&1 &
   PIDS+=($!)
   sleep 1
   if kill -0 "${PIDS[-1]}" 2>/dev/null; then

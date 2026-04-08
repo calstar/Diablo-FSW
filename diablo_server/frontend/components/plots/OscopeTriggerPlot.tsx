@@ -152,8 +152,9 @@ export default function OscopeTriggerPlot() {
     const unsub = ws.on(MessageType.SENSOR_UPDATE, (p: unknown) => {
       const update = p as SensorUpdate;
       if (update.component !== 'raw_angle') return;
-      if (update.entity === 'ENC.CH1') latestEnc1.current = rawToDeg(update.value);
-      else if (update.entity === 'ENC.CH2') latestEnc2.current = rawToDeg(update.value);
+      const e = update.entity;
+      if (e === 'ENC1.CH1' || e === 'ENC.CH1') latestEnc1.current = rawToDeg(update.value);
+      else if (e === 'ENC1.CH2' || e === 'ENC.CH2') latestEnc2.current = rawToDeg(update.value);
       else return;
 
       if (triggerStateRef.current === 'TRIGGERED') return;

@@ -103,6 +103,16 @@ function buildVTableStreamSubscriptionList(): Array<[number, number]> {
         }
     };
 
+    /** ACT raw [0x30, …] vs calibrated current [0x31, raw_lo+0x10] — same low-byte scheme as PT but separate high byte (calibration_main.cpp). */
+    const addActuatorBoard = (boardNumber: number, channels: number[]): void => {
+        for (const ch of channels) {
+            const rawLo = (boardNumber - 1) * 0x20 + ch;
+            const calLo = (boardNumber - 1) * 0x20 + 0x10 + ch;
+            addUnique(0x30, rawLo);
+            addUnique(0x31, calLo);
+        }
+    };
+
     try {
         const cfg = readConfig();
         const boards = (cfg.boards || {}) as Record<string, unknown>;
@@ -136,6 +146,10 @@ function buildVTableStreamSubscriptionList(): Array<[number, number]> {
                                 : t === 'ENC' || t === 'ENCODER' ? 0x24
                                     : t === 'ACTUATOR' ? 0x30
                                         : -1;
+            if (t === 'ACTUATOR') {
+                addActuatorBoard(boardNumber, active);
+                continue;
+            }
             if (typeHi < 0) continue;
             addBoard(typeHi, boardNumber, active);
         }
@@ -145,8 +159,8 @@ function buildVTableStreamSubscriptionList(): Array<[number, number]> {
 
     addBoard(0x20, 1, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     addBoard(0x20, 2, [1, 2, 3, 4]);
-    addBoard(0x30, 2, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-    addBoard(0x30, 4, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    addActuatorBoard(2, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    addActuatorBoard(4, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     addBoard(0x21, 1, [2, 3, 4, 5]);
     addBoard(0x22, 1, [1, 2, 3, 4]);
     addBoard(0x23, 2, [1, 2, 6]);
@@ -164,7 +178,9 @@ function buildVTableStreamSubscriptionList(): Array<[number, number]> {
         [0x50, 0x60], [0x50, 0x61], [0x50, 0x62], [0x50, 0x63], [0x50, 0x64], [0x50, 0x65], [0x50, 0x66],
     ].forEach(([h, l]) => addUnique(h, l));
 
-    for (let i = 1; i <= 64; i++) {
+    // Heartbeats [0x10, board_id] and self-test [0x60, board_id] use the low byte as config
+    // board_id (often 21, 60, 72, …). Subscribe 1..255 so Elodin forwards streams for all boards.
+    for (let i = 1; i <= 255; i++) {
         addUnique(0x10, i);
         addUnique(0x60, i);
     }

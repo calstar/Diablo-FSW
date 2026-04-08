@@ -75,9 +75,13 @@ function buildVTableStreamSubscriptionList() {
             addUnique(typeHi, (boardNumber - 1) * 0x20 + 0x10 + ch);
         }
     };
-    const addBoardCalOnly = (typeHi, boardNumber, channels) => {
+    /** ACT raw [0x30, …] vs calibrated current [0x31, raw_lo+0x10] — same low-byte scheme as PT but separate high byte (calibration_main.cpp). */
+    const addActuatorBoard = (boardNumber, channels) => {
         for (const ch of channels) {
-            addUnique(typeHi, (boardNumber - 1) * 0x20 + 0x10 + ch);
+            const rawLo = (boardNumber - 1) * 0x20 + ch;
+            const calLo = (boardNumber - 1) * 0x20 + 0x10 + ch;
+            addUnique(0x30, rawLo);
+            addUnique(0x31, calLo);
         }
     };
     try {
@@ -114,13 +118,13 @@ function buildVTableStreamSubscriptionList() {
                             : t === 'ENC' || t === 'ENCODER' ? 0x24
                                 : t === 'ACTUATOR' ? 0x30
                                     : -1;
+            if (t === 'ACTUATOR') {
+                addActuatorBoard(boardNumber, active);
+                continue;
+            }
             if (typeHi < 0)
                 continue;
             addBoard(typeHi, boardNumber, active);
-            // Actuator calibrated current_a is published on 0x31 calibrated offsets.
-            if (t === 'ACTUATOR') {
-                addBoardCalOnly(0x31, boardNumber, active);
-            }
         }
     }
     catch (e) {
@@ -128,10 +132,8 @@ function buildVTableStreamSubscriptionList() {
     }
     addBoard(0x20, 1, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     addBoard(0x20, 2, [1, 2, 3, 4]);
-    addBoard(0x30, 2, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]); // actuator raw
-    addBoard(0x30, 4, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]); // actuator raw
-    addBoardCalOnly(0x31, 2, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]); // actuator current_a only
-    addBoardCalOnly(0x31, 4, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]); // actuator current_a only
+    addActuatorBoard(2, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    addActuatorBoard(4, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     addBoard(0x21, 1, [2, 3, 4, 5]);
     addBoard(0x22, 1, [1, 2, 3, 4]);
     addBoard(0x23, 2, [1, 2, 6]);
@@ -249,7 +251,7 @@ export async function registerSensorVTables(client, ptMap, actMap) {
     const types = [
         { hi: 0x21, prefix: 'TC', unit: 'temperature_c' },
         { hi: 0x22, prefix: 'RTD', unit: 'temperature_c' },
-        { hi: 0x23, prefix: 'LC', unit: 'force_n' }
+        { hi: 0x23, prefix: 'LC', unit: 'force_kg' }
     ];
     for (const t of types) {
         for (let ch = 1; ch <= 20; ch++) {

@@ -107,6 +107,50 @@ const CSV_STATE_MAP = {
  * Resolve an actuator CSV name to its board channel ID.
  * All data sourced from config.toml actuator_roles.
  */
+/**
+ * Map a CSV / role / GUI actuator name to the Elodin [0x32] entity the thin server and parser use.
+ * Uses the same board slot rule as FSW: board_id % 10 with 0 → 10.
+ */
+/** Resolve role / CSV name → { board slot, local channel } from actuator_roles (same rule as FSW). */
+export function resolveActuatorBoardSlotAndChannel(actuatorName) {
+    try {
+        const config = readConfig();
+        const roles = config.actuator_roles;
+        if (!roles)
+            return null;
+        let entry = roles[actuatorName];
+        if (!entry && ACTUATOR_ABBREV_MAP[actuatorName]) {
+            const full = ACTUATOR_ABBREV_MAP[actuatorName];
+            entry = roles[full];
+        }
+        if (!Array.isArray(entry) || entry.length < 2)
+            return null;
+        const localCh = typeof entry[1] === 'number' ? entry[1] : Number(entry[1]);
+        if (!Number.isFinite(localCh) || localCh < 1)
+            return null;
+        const boardId = entry.length >= 3 && typeof entry[2] === 'number' ? entry[2] : 12;
+        const mod = boardId % 10;
+        const bn = mod === 0 ? 10 : mod;
+        return { bn, localCh };
+    }
+    catch {
+        return null;
+    }
+}
+/** Elodin [0x32] commanded entity — matches sequencer / DatabaseConfig. */
+export function resolveActuatorCmdEntity(actuatorName) {
+    const r = resolveActuatorBoardSlotAndChannel(actuatorName);
+    if (!r)
+        return null;
+    return `ACT_CMD.B${r.bn}.CH${r.localCh}`;
+}
+/** Telemetry entity for [0x31] actuator_state — must match elodin-protocol.ts */
+export function resolveActuatorTelemetryEntity(actuatorName) {
+    const r = resolveActuatorBoardSlotAndChannel(actuatorName);
+    if (!r)
+        return null;
+    return `ACT${r.bn}.CH${r.localCh}`;
+}
 export function getActuatorChannel(actuatorName, configActuatorChannels) {
     // Explicit caller-provided channels (highest priority)
     const fromCaller = configActuatorChannels[actuatorName];
@@ -279,25 +323,6 @@ function buildCSVSearchPaths() {
     }
     return paths;
 }
-/**
- * Commanded state for Idle (de-energized) from config: NO → OPEN (1), NC → CLOSED (0).
- * Used for all actuators in config.actuator_roles so IDLE reflects true de-energized state.
- */
-function getIdleCommandedStateFromConfig(actuatorName) {
-    try {
-        const config = readConfig();
-        const roles = config.actuator_roles || {};
-        const value = roles[actuatorName];
-        if (Array.isArray(value) && value.length >= 1 && value[0] === 'NO')
-            return 1;
-        if (Array.isArray(value) && value.length >= 1)
-            return 0; // NC or other
-    }
-    catch {
-        console.warn(`⚠️ Could not get actuator type for "${actuatorName}" from config`);
-    }
-    return null;
-}
 export function getStateActuatorMap() {
     const possiblePaths = buildCSVSearchPaths();
     for (const path of possiblePaths) {
@@ -309,23 +334,6 @@ export function getStateActuatorMap() {
             console.log(`   Trying: ${path} (found)`);
             const map = parseStateActuatorsCSV(path);
             if (Object.keys(map).length > 0) {
-                // IDLE = de-energized: every actuator with config type gets NO→OPEN, NC→CLOSED
-                if (!map[SystemState.IDLE])
-                    map[SystemState.IDLE] = {};
-                const roles = (() => { try {
-                    return readConfig().actuator_roles || {};
-                }
-                catch {
-                    return {};
-                } })();
-                const roleNames = Object.keys(roles);
-                for (const name of roleNames) {
-                    const cmd = getIdleCommandedStateFromConfig(name);
-                    if (cmd !== null) {
-                        map[SystemState.IDLE][name] = cmd;
-                        console.log(`   Idle (de-energized): ${name} = ${cmd ? 'OPEN' : 'CLOSED'} (${cmd ? 'NO' : 'NC'})`);
-                    }
-                }
                 console.log(`✅ Loaded state actuator map from: ${path}`);
                 return map;
             }

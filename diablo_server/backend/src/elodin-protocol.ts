@@ -71,7 +71,9 @@ function parseCalibratedSensorPayload(
   const calibratedValue = payload.readFloatLE(12);
   if (!Number.isFinite(calibratedValue) || Number.isNaN(calibratedValue)) return [];
   if (fieldName === 'pressure_psi' && (calibratedValue < -50 || calibratedValue > 10000)) return [];
-  if (fieldName === 'temperature_c' && (calibratedValue < -200 || calibratedValue > 2000)) return [];
+  // TC/RTD: allow cryogenic / high-temp lab sensors; calibration_service clamps before publish.
+  // Reject only obvious garbage (e.g. polynomial blow-up misread as °C).
+  if (fieldName === 'temperature_c' && (calibratedValue < -500 || calibratedValue > 10000)) return [];
   if (fieldName === 'force_kg' && (calibratedValue < -10000 || calibratedValue > 50000)) return [];
   const tsMs = Number(payload.readBigUInt64LE(0) / 1000000n);
   const rawValue = rawAdcUnsigned ? payload.readUInt32LE(16) : payload.readInt32LE(16);

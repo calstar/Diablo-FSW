@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useSensorStore } from '@/lib/store';
+import { selfTestBoardIdsFromSensorData } from '@/lib/self-test-keys';
 import { getWebSocketClient } from '@/lib/websocket';
 import { MessageType, BoardStatusPayload, BoardStatus, engineStateCodeToLabel } from '@/lib/types';
 
@@ -222,20 +223,22 @@ export default function BoardsPage() {
       <div className="mt-12">
         <h2 className="text-2xl font-bold text-text mb-4 tracking-tight">Self Tests</h2>
         {(() => {
-          const testedBoards = Object.values(boardsMap ?? {}).filter(b =>
-            Object.keys(sensorData).some(k => k.startsWith(`SELF_TEST.BOARD_${b.id}.`))
-          );
-          if (testedBoards.length === 0) {
+          const testedIds = selfTestBoardIdsFromSensorData(sensorData);
+          if (testedIds.length === 0) {
             return <div className="text-text-muted italic">No self test data available yet.</div>;
           }
           return (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {testedBoards.map(b => {
-                const testKeys = Object.keys(sensorData).filter((k) => k.startsWith(`SELF_TEST.BOARD_${b.id}.`));
+              {testedIds.map((boardId) => {
+                const b = boardsMap?.[boardId];
+                const testKeys = Object.keys(sensorData).filter((k) => k.startsWith(`SELF_TEST.BOARD_${boardId}.`));
                 const allPassed = testKeys.every(k => sensorData[k] === 1);
+                const title = b
+                  ? `${b.type || 'BOARD'} ${b.boardNumber != null ? b.boardNumber : ''}`.trim()
+                  : `Board ${boardId}`;
                 return (
-                  <div key={b.id} className={`rounded-xl border p-5 ${allPassed ? 'border-green-900/50 bg-green-950/10' : 'border-red-900/50 bg-red-950/10'}`}>
-                    <h3 className="text-lg font-bold mb-3">{b.type || 'BOARD'} {b.boardNumber} (ID {b.id})</h3>
+                  <div key={boardId} className={`rounded-xl border p-5 ${allPassed ? 'border-green-900/50 bg-green-950/10' : 'border-red-900/50 bg-red-950/10'}`}>
+                    <h3 className="text-lg font-bold mb-3">{title} (ID {boardId})</h3>
                     <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
                       {testKeys.map(k => {
                         const sensorMatch = k.match(/sensor_(\d+)/);

@@ -13,18 +13,32 @@
 #   - npm install done in diablo_server/backend
 #   - Python 3 with board_simulator.py dependencies (fallback data source)
 #
-# Usage: bash scripts/test/test_integration.sh [-v|--verbose] [--legacy]
-#   --legacy  Use server-legacy.ts (old monolithic backend) instead of server.ts (default)
+# Usage:
+#   bash test/test_integration.sh [-v|--verbose] [--legacy] [--only=<ids>]
+#
+#   --legacy   Use server-legacy.ts instead of server.ts (default: thin backend).
+#
+# Running only some WS checks (still starts the full stack unless you hack the script):
+#   bash test/test_integration.sh --only=sensor_data
+#   bash test/test_integration.sh --only=sensor_data,cal_stability
+#   INTEGRATION_ONLY=sensor_data bash test/test_integration.sh
+#   # Numeric aliases match printed test numbers: 1=sensor_data, 11=sensor_config, …
+#   bash test/test_integration.sh --only=1
+# Full list of ids, dependencies (sequencer, controller, etc.), and direct tsx usage:
+#   see the docstring at the top of test/ws_data_flow_test.ts
 # ═══════════════════════════════════════════════════════════════════════════════
 
 set -euo pipefail
 
 VERBOSE=0
 BACKEND=thin
+# Subset of ws_data_flow_test checks; see script header "Running only some WS checks"
+ONLY_FLAG=""
 for arg in "$@"; do
   case "$arg" in
     -v|--verbose) VERBOSE=1 ;;
     --legacy) BACKEND=legacy ;;
+    --only=*) ONLY_FLAG="$arg" ;;
   esac
 done
 
@@ -105,6 +119,10 @@ cleanup() {
   sleep 1
   for pid in "${PIDS[@]}"; do
     kill -9 "$pid" 2>/dev/null || true
+  done
+  # Reap children so bash does not print "line N: PID Killed (command...)" on exit.
+  for pid in "${PIDS[@]}"; do
+    wait "$pid" 2>/dev/null || true
   done
   # Then sweep for anything that escaped PID tracking (e.g. child processes)
   kill_stale_integration_processes
@@ -623,7 +641,7 @@ export INTEGRATION_SKIP_STARTUP_E2E
   --seq-log "$REPO_ROOT/.tmp/integration_sequencer_$$.log" \
   --backend-log "$REPO_ROOT/.tmp/integration_backend_$$.log" \
   --controller-log "$REPO_ROOT/.tmp/integration_controller_$$.log" \
-  --backend="$BACKEND" $SEQ_FLAG $CTRL_FLAG $VERBOSE_FLAG)
+  --backend="$BACKEND" $SEQ_FLAG $CTRL_FLAG $VERBOSE_FLAG $ONLY_FLAG)
 WS_TEST_EXIT=$?
 
 # ── Stop simulator and flush stats ────────────────────────────────────────────

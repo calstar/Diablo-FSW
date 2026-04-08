@@ -1,6 +1,8 @@
 #!/bin/bash
 # Stop all Sensor System processes, tmux sessions, and ports.
 
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
 echo "Stopping Sensor System tmux sessions and processes..."
 
 # ── Tmux sessions ─────────────────────────────────────────────────────────────
@@ -23,9 +25,12 @@ pkill -f "board_simulator"             2>/dev/null || true
 pkill -f "elodin-db run.*2240"         2>/dev/null || true
 
 # ── Web GUI (frontend + backend) ──────────────────────────────────────────────
+# Repo-anchored only — do not use pkill -f "node.*server" (matches IDE remote Node).
 pkill -f "next dev"                    2>/dev/null || true
-pkill -f "tsx.*server.ts"              2>/dev/null || true
-pkill -f "node.*server"                2>/dev/null || true
+pkill -f "${REPO_ROOT}/diablo_server/backend.*server\.ts" 2>/dev/null || true
+pkill -f "${REPO_ROOT}/diablo_server/backend.*server-legacy\.ts" 2>/dev/null || true
+pkill -f "${REPO_ROOT}/diablo_server/backend.*elodin-relay\.ts" 2>/dev/null || true
+pkill -f "${REPO_ROOT}/diablo_server/backend.*dist/server\.js" 2>/dev/null || true
 
 # ── Python calibration sidecar ────────────────────────────────────────────────
 pkill -f "calibration_server.py"       2>/dev/null || true
@@ -41,7 +46,7 @@ done
 # ── Brief grace period then force-kill anything still holding ports ───────────
 sleep 0.5
 
-for port in 9999 9998 9997 8081 8082 2240 5005; do
+for port in 9999 9998 9997 8081 8082 3000 2240 5005; do
     pid=$(ss -tlpn "sport = :${port}" 2>/dev/null | grep -oP '(?<=pid=)\d+' | head -1)
     if [ -n "$pid" ]; then
         echo "  Force-killing PID $pid still on port $port"

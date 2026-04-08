@@ -33,21 +33,27 @@ function parseRawSensorPayload(payload, channelId, entity, fieldName = 'raw_adc_
     const tsMs = Number(payload.readBigUInt64LE(0) / 1000000n);
     return { entity, component: fieldName, value: rawValue, timestamp: tsMs };
 }
-function parseCalibratedSensorPayload(payload, channelId, entity, fieldName = 'pressure_psi', rawFields = ['raw_adc_counts', 'raw_adc']) {
-    // CalibratedPTMessage: u64(0) ts + u8(8) ch + pad3(9-11) + float(12) psi + u32(16) raw + u8(20)
+function parseCalibratedSensorPayload(payload, channelId, entity, fieldName = 'pressure_psi', rawFields = ['raw_adc_counts', 'raw_adc'], 
+/** HP PT board (slot 2, board_id 22): wire raw is unsigned 0..2³¹ scale; LP PT uses signed ADS1262 codes. */
+rawAdcUnsigned = false) {
+    // CalibratedPTMessage (and TC/RTD/LC/ACT siblings): u64(0) ts + u8(8) ch + pad3(9-11) + float(12)
+    // + u32(16) raw + u8(20). LP PT: C++ uses static_cast<uint32_t>(int32_t adc) — interpret as int32.
+    // HP PT: C++ stores adc_u32 (4–20 mA); readInt32LE misreads codes ≥0x80000000 as negative → plot chaos.
     if (payload.length < RAW_SENSOR_PAYLOAD_SIZE)
         return [];
     const calibratedValue = payload.readFloatLE(12);
     if (!Number.isFinite(calibratedValue) || Number.isNaN(calibratedValue))
         return [];
-    if (fieldName === 'pressure_psi' && (calibratedValue < -100 || calibratedValue > 10000))
+    if (fieldName === 'pressure_psi' && (calibratedValue < -50 || calibratedValue > 10000))
         return [];
-    if (fieldName === 'temperature_c' && (calibratedValue < -200 || calibratedValue > 2000))
+    // TC/RTD: allow cryogenic / high-temp lab sensors; calibration_service clamps before publish.
+    // Reject only obvious garbage (e.g. polynomial blow-up misread as °C).
+    if (fieldName === 'temperature_c' && (calibratedValue < -500 || calibratedValue > 10000))
         return [];
     if (fieldName === 'force_kg' && (calibratedValue < -10000 || calibratedValue > 50000))
         return [];
     const tsMs = Number(payload.readBigUInt64LE(0) / 1000000n);
-    const rawValue = payload.readUInt32LE(16);
+    const rawValue = rawAdcUnsigned ? payload.readUInt32LE(16) : payload.readInt32LE(16);
     const out = [{ entity, component: fieldName, value: calibratedValue, timestamp: tsMs }];
     for (const rawField of rawFields) {
         out.push({ entity, component: rawField, value: rawValue, timestamp: tsMs });
@@ -100,15 +106,18 @@ export function parseElodinPacket(packetId, payload, entityMaps) {
         return { boardNumber, channel, isRaw };
     };
     // ── PT: [0x20, ...] ──────────────────────────────────────────────────────
+    // Board slot 2 (board_id …22) = HP 4–20 mA PTs: unsigned ADC full-scale to 2³¹ (see FSW convert_hp_pt_to_pressure).
+    // Other PT boards: signed ADS1262-style codes.
     if (high === 0x20 && low >= 0x01) {
         const { boardNumber, channel, isRaw } = decodeLow(low);
         if (channel >= 1 && channel <= 10) {
+            const hpPtSlot = boardNumber === 2;
             if (isRaw) {
-                const r = parseRawSensorPayload(payload, channel, `PT${boardNumber}.CH${channel}`, 'raw_adc_counts', true);
+                const r = parseRawSensorPayload(payload, channel, `PT${boardNumber}.CH${channel}`, 'raw_adc_counts', !hpPtSlot);
                 return r ? [r] : [];
             }
             else {
-                const r = parseCalibratedSensorPayload(payload, channel, `PT${boardNumber}_Cal.CH${channel}`, 'pressure_psi');
+                const r = parseCalibratedSensorPayload(payload, channel, `PT${boardNumber}_Cal.CH${channel}`, 'pressure_psi', ['raw_adc_counts', 'raw_adc'], hpPtSlot);
                 return r;
             }
         }

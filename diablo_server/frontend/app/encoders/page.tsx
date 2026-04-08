@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import DerivedTimeSeriesPlot, { type DerivedTimeSeriesPlotHandle } from '@/components/plots/DerivedTimeSeriesPlot';
 import OscopeTriggerPlot from '@/components/plots/OscopeTriggerPlot';
+import { useAliasedSensorRate } from '@/lib/aliased-sensor-rate';
 import { useSensorStore, useSensorValue } from '@/lib/store';
 import { getWebSocketClient } from '@/lib/websocket';
 import { MessageType, SensorUpdate, StateUpdate, BoardStatus, BoardStatusPayload } from '@/lib/types';
@@ -10,7 +11,8 @@ import { MessageType, SensorUpdate, StateUpdate, BoardStatus, BoardStatusPayload
 const RAW_TO_DEG = 360.0 / 4096.0;
 const rawToDeg = (raw: number) => (raw & 0x0FFF) * RAW_TO_DEG;
 
-const ENC_ENTITIES = ['ENC.CH1', 'ENC.CH2'];
+/** Must match WebSocket entity names from the thin server (ENC + board_number). */
+const ENC_ENTITIES = ['ENC1.CH1', 'ENC1.CH2'];
 const ENC_LABELS = ['Encoder 1', 'Encoder 2'];
 const ENC_COLORS = ['#3B82F6', '#F97316'];
 
@@ -32,10 +34,17 @@ export default function EncodersPage() {
     { label: '60s', seconds: 60 },
   ];
 
-  const enc1Raw = useSensorValue('ENC.CH1', 'raw_angle');
-  const enc2Raw = useSensorValue('ENC.CH2', 'raw_angle');
+  const enc1Raw = useSensorValue('ENC1.CH1', 'raw_angle');
+  const enc2Raw = useSensorValue('ENC1.CH2', 'raw_angle');
   const enc1Deg = enc1Raw != null ? rawToDeg(enc1Raw) : null;
   const enc2Deg = enc2Raw != null ? rawToDeg(enc2Raw) : null;
+
+  /** Per-channel Hz from SENSOR_UPDATE (same as Sensor Info). Header shows mean of active channels — not sum (two × 48 Hz was showing as ~96 Hz). */
+  const hzCh1 = useAliasedSensorRate('ENC1.CH1', 'raw_angle');
+  const hzCh2 = useAliasedSensorRate('ENC1.CH2', 'raw_angle');
+  const encRates = [hzCh1, hzCh2].filter((h) => h > 0);
+  const dataRateHz = encRates.length === 0 ? 0 : encRates.reduce((a, b) => a + b, 0) / encRates.length;
+  const dataRateStr = dataRateHz > 0 ? `${dataRateHz.toFixed(1)} Hz` : '---';
 
   const encoderBoard = useMemo(() => {
     const boards = Object.values(boardsMap ?? {});
@@ -43,9 +52,6 @@ export default function EncodersPage() {
   }, [boardsMap]);
 
   const connected = encoderBoard?.connected ?? false;
-  const dataRateHz = encoderBoard?.frequencyHz;
-  const dataRateStr =
-    dataRateHz != null && isFinite(dataRateHz) ? `${dataRateHz.toFixed(1)} Hz` : '---';
 
   useEffect(() => {
     const unsub1 = ws.on(MessageType.SENSOR_UPDATE, (p: unknown) => updateSensor(p as SensorUpdate));

@@ -30,7 +30,7 @@ import { registerVTables, clearSubscriptionState } from './elodin-vtable-registr
 import { registerControllerVTables } from './legacy/elodin-vtable-controller.js';
 import { createAPIHandler } from './api-server.js';
 import { readConfig } from './routes/config.js';
-import { getStateActuatorMap, CSV_ACTUATOR_TO_ENTITY } from './legacy/state-actuators.js';
+import { getStateActuatorMap, CSV_ACTUATOR_TO_ENTITY, resolveActuatorCmdEntity, resolveActuatorTelemetryEntity } from './legacy/state-actuators.js';
 import { getStateTransitions } from './legacy/state-transitions.js';
 import { handleCalibrationCommand } from './calibration-handler.js';
 import { loadPTCalibration } from './calibration.js';
@@ -41,8 +41,12 @@ const ELODIN_HOST = process.env.ELODIN_HOST ?? '127.0.0.1';
 const ELODIN_PORT = parseInt(process.env.ELODIN_PORT ?? '2240', 10);
 const ACT_SVC_PORT = parseInt(process.env.ACTUATOR_SERVICE_PORT ?? '9998', 10);
 const CTRL_SVC_PORT = parseInt(process.env.CONTROLLER_SERVICE_PORT ?? '9999', 10);
-const HISTORY_MAX_POINTS = 1000; // per series
-const HISTORY_MAX_KEYS = 80;
+const THIN_VERBOSE_CONNECTION_LOG = process.env.THIN_VERBOSE_CONNECTION_LOG === '1';
+const THIN_HEARTBEAT_DIAG_LOG = process.env.THIN_HEARTBEAT_DIAG_LOG === '1';
+const THIN_STATS_LOG = process.env.THIN_STATS_LOG === '1';
+// ~20 Hz × 300 s (5 min window) ≈ 6000; keep extra for HISTORICAL_DATA on reconnect.
+const HISTORY_MAX_POINTS = 16000; // per series
+const HISTORY_MAX_KEYS = 200;
 const HISTORY_STALE_MS = 5 * 60 * 1000;
 const BOARD_STATUS_HZ = 1; // broadcast rate for board status
 /** Board marked disconnected if no Elodin [0x10] heartbeat for this long. Too low causes UI flap when DB or TCP jitters; heartbeats are usually multi-Hz but not hard-real-time. */
@@ -65,28 +69,41 @@ function shouldThrottleSensorStreamPacket(high, _low) {
 }
 const historyCache = new Map();
 const historyCacheTime = new Map(); // wall-clock last update
-const broadcastLastTime = new Map(); // per-key 10 Hz gate
+const broadcastLastTime = new Map(); // per-key throttle gate
 function recordHistory(key, timeSec, value) {
     let s = historyCache.get(key);
     if (!s) {
-        s = { time: [], values: [], lastMs: Date.now() };
+        s = { tBuf: new Float64Array(HISTORY_MAX_POINTS), vBuf: new Float64Array(HISTORY_MAX_POINTS), head: 0, len: 0, lastMs: 0 };
         historyCache.set(key, s);
     }
-    const lastT = s.time.length > 0 ? s.time[s.time.length - 1] : -Infinity;
-    if (timeSec > lastT) {
-        s.time.push(timeSec);
-        s.values.push(value);
+    // Overwrite last entry if same timestamp; otherwise advance ring.
+    const lastIdx = (s.head - 1 + HISTORY_MAX_POINTS) % HISTORY_MAX_POINTS;
+    if (s.len > 0 && s.tBuf[lastIdx] === timeSec) {
+        s.vBuf[lastIdx] = value;
     }
-    else if (timeSec === lastT) {
-        s.values[s.values.length - 1] = value;
+    else {
+        s.tBuf[s.head] = timeSec;
+        s.vBuf[s.head] = value;
+        s.head = (s.head + 1) % HISTORY_MAX_POINTS;
+        if (s.len < HISTORY_MAX_POINTS)
+            s.len++;
     }
-    if (s.time.length > HISTORY_MAX_POINTS) {
-        const excess = s.time.length - HISTORY_MAX_POINTS;
-        s.time.splice(0, excess);
-        s.values.splice(0, excess);
+    const now = Date.now();
+    s.lastMs = now;
+    historyCacheTime.set(key, now);
+}
+/** Read ring buffer as plain arrays for sendHistoricalData (allocates once per call, OK since it's only on connect). */
+function readHistorySeries(s) {
+    const len = s.len;
+    const tail = len < HISTORY_MAX_POINTS ? 0 : s.head;
+    const time = new Array(len);
+    const values = new Array(len);
+    for (let i = 0; i < len; i++) {
+        const idx = (tail + i) % HISTORY_MAX_POINTS;
+        time[i] = s.tBuf[idx];
+        values[i] = s.vBuf[idx];
     }
-    s.lastMs = Date.now();
-    historyCacheTime.set(key, Date.now());
+    return { time, values };
 }
 function pruneHistory() {
     const now = Date.now();
@@ -129,13 +146,11 @@ try {
 }
 catch { /* no calibration file — fine */ }
 const calChannelToEntityMap = loadSensorRoleMap().channelToEntityMap;
-/** Map PT{n}.CH{m} entity to uniqueId = board_id*100+local_ch (matches calibration_service). */
-function uniqueIdFromPtEntity(entity) {
-    const m = entity.match(/^PT(\d+)(?:_Cal)?\.CH(\d+)$/);
-    if (!m)
-        return null;
-    const slot = parseInt(m[1], 10);
-    const ch = parseInt(m[2], 10);
+/** Cached slot→board_id map for uniqueIdFromPtEntity — built once, avoids config re-reads on hot path. */
+const _ptSlotToBoardId = new Map();
+function _ensurePtSlotCache() {
+    if (_ptSlotToBoardId.size > 0)
+        return;
     try {
         const config = readConfig();
         const boards = (config.boards || {});
@@ -145,13 +160,21 @@ function uniqueIdFromPtEntity(entity) {
             if (typeof bid !== 'number' || typ !== 'PT')
                 continue;
             const mod = bid % 10;
-            const slotWant = mod === 0 ? 10 : mod;
-            if (slotWant === slot)
-                return bid * 100 + ch;
+            _ptSlotToBoardId.set(mod === 0 ? 10 : mod, bid);
         }
     }
-    catch { /* use fallback */ }
-    return slot * 100 + ch;
+    catch { /* fine — fallback below */ }
+}
+/** Map PT{n}.CH{m} entity to uniqueId = board_id*100+local_ch (matches calibration_service). */
+function uniqueIdFromPtEntity(entity) {
+    const m = entity.match(/^PT(\d+)(?:_Cal)?\.CH(\d+)$/);
+    if (!m)
+        return null;
+    const slot = parseInt(m[1], 10);
+    const ch = parseInt(m[2], 10);
+    _ensurePtSlotCache();
+    const bid = _ptSlotToBoardId.get(slot);
+    return bid !== undefined ? bid * 100 + ch : slot * 100 + ch;
 }
 const calibrationHost = {
     ptCalibration,
@@ -202,17 +225,50 @@ function loadBoardsFromConfig() {
 loadBoardsFromConfig();
 // ── State actuator map (expected positions per state from CSV) ────────────────
 const STATE_ACTUATOR_MAP = getStateActuatorMap();
-/** Build entity→expected map for a given state. Returns { "ACT.LOX_Main": 1, ... } */
+/**
+ * Build entity→expected map for a given state.
+ * Keys must match Elodin [0x31] actuator_state entities (ACT{n}.CH{m}), not ACT.Role_Name,
+ * or mismatch detection never lines up with sensed state.
+ */
 function getExpectedPositions(state) {
     const expected = STATE_ACTUATOR_MAP[state];
     if (!expected)
         return {};
     const result = {};
     for (const [name, value] of Object.entries(expected)) {
+        const tel = resolveActuatorTelemetryEntity(name);
+        if (tel) {
+            result[tel] = value;
+            continue;
+        }
         const entity = CSV_ACTUATOR_TO_ENTITY[name] || `ACT.${name.replace(/\s+/g, '_')}`;
         result[entity] = value;
     }
     return result;
+}
+/** Push CSV-derived commanded actuator states using ACT_CMD.B*.CH* keys (matches Elodin [0x32] + GUI). */
+function broadcastCommandedActuatorsForState(state) {
+    const raw = STATE_ACTUATOR_MAP[state];
+    if (!raw)
+        return;
+    const epochNow = Date.now();
+    for (const [actuatorName, value] of Object.entries(raw)) {
+        const cmdEntity = resolveActuatorCmdEntity(actuatorName);
+        if (!cmdEntity)
+            continue;
+        const key = `${cmdEntity}.actuator_state_commanded`;
+        if (firstPacketTimeMs !== null) {
+            const timeSec = (epochNow - firstPacketTimeMs) / 1000;
+            if (timeSec >= 0 && timeSec < 86400)
+                recordHistory(key, timeSec, value);
+        }
+        stats.sensorUpdatesBroadcast++;
+        broadcast({
+            type: MessageType.SENSOR_UPDATE,
+            timestamp: epochNow,
+            payload: { entity: cmdEntity, component: 'actuator_state_commanded', value, timestamp: epochNow },
+        });
+    }
 }
 // ── Actuator state mismatch detection ────────────────────────────────────────
 /** Last-known actuator_state (sensed from [0x31] current-sense) per entity */
@@ -301,21 +357,23 @@ function updateBoard(low, payload) {
     }
     if (wasDisconnected) {
         broadcastBoardStatus();
-        console.log(`[ThinServer] Board ${boardId} (${typeStr}) connected`);
+        if (THIN_VERBOSE_CONNECTION_LOG) {
+            console.log(`[ThinServer] Board ${boardId} (${typeStr}) connected`);
+        }
     }
 }
 // Periodic heartbeat rate diagnostic — log actual arrival rates so we can
 // see if Elodin is delivering duplicates vs boards sending too fast.
 let hbDiagCount = new Map();
 setInterval(() => {
-    if (hbDiagCount.size > 0) {
+    if (THIN_HEARTBEAT_DIAG_LOG && hbDiagCount.size > 0) {
         const entries = Array.from(hbDiagCount.entries())
             .map(([id, count]) => `board ${id}=${count}/s`)
             .join(', ');
         console.log(`[ThinServer] Heartbeat arrival rate: ${entries}`);
-        hbDiagCount.clear();
     }
-    if (stats.relayEntityUpdatesReceived > 0) {
+    hbDiagCount.clear();
+    if (THIN_STATS_LOG && stats.relayEntityUpdatesReceived > 0) {
         console.log(`[ThinServer] Stats: entityUpdates=${stats.relayEntityUpdatesReceived} broadcasts=${stats.sensorUpdatesBroadcast} wsClients=${wss.clients.size}`);
     }
 }, 5000);
@@ -450,7 +508,10 @@ const httpServer = http.createServer(async (req, res) => {
     res.end();
 });
 const wss = new WebSocketServer({ server: httpServer });
+let wsConnCounter = 0;
 function broadcast(message) {
+    if (wss.clients.size === 0)
+        return;
     const data = JSON.stringify(message);
     wss.clients.forEach((ws) => {
         if (ws.readyState === WebSocket.OPEN) {
@@ -487,13 +548,25 @@ function broadcastBoardStatus() {
 }
 setInterval(broadcastBoardStatus, 1000 / BOARD_STATUS_HZ);
 // ── Client connection ─────────────────────────────────────────────────────────
-wss.on('connection', (ws) => {
-    console.log('[ThinServer] Client connected');
+wss.on('connection', (ws, req) => {
+    const connId = `c${++wsConnCounter}`;
+    const openedAt = Date.now();
+    const remoteAddr = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+        req.socket.remoteAddress ||
+        'unknown';
+    const userAgent = req.headers['user-agent'] ?? 'unknown';
+    let inboundMessages = 0;
+    let outboundMessages = 0;
+    let lastInboundAt = 0;
+    let lastOutboundAt = 0;
+    console.log(`[WS_BACKEND] ${JSON.stringify({ event: 'conn_open', ts: openedAt, connId, remoteAddr, userAgent, wsClients: wss.clients.size })}`);
     // Connection status
     send(ws, {
         type: MessageType.CONNECTION_STATUS, timestamp: Date.now(),
-        payload: { connected: true, elodinConnected: elodin.isConnected() },
+        payload: { connected: true, elodinConnected: elodin.isConnected(), connId },
     });
+    outboundMessages++;
+    lastOutboundAt = Date.now();
     // Mission start time
     if (firstPacketTimeMs !== null) {
         send(ws, {
@@ -506,34 +579,45 @@ wss.on('connection', (ws) => {
         type: MessageType.COUNTDOWN_TARGET_UPDATE, timestamp: Date.now(),
         payload: { targetTimeMs: countdownTargetMs },
     });
+    outboundMessages++;
+    lastOutboundAt = Date.now();
     // Current state
     send(ws, {
         type: MessageType.STATE_UPDATE, timestamp: Date.now(),
         payload: { currentState, stateName: SystemState[currentState] ?? 'UNKNOWN', timestamp: Date.now(), debugMode },
     });
+    outboundMessages++;
+    lastOutboundAt = Date.now();
     // Board status
     const boards = Array.from(boardsStatus.values());
     if (boards.length > 0) {
         send(ws, { type: MessageType.BOARD_STATUS_UPDATE, timestamp: Date.now(), payload: { boards } });
+        outboundMessages++;
+        lastOutboundAt = Date.now();
     }
-    // Initial actuator positions from state machine CSV (IDLE state defaults).
-    // Sent as SENSOR_UPDATE with component 'actuator_state_commanded' so the frontend
-    // shows correct positions before any [0x32] data arrives from Elodin.
-    const idlePositions = getExpectedPositions(currentState);
-    const now = Date.now();
-    for (const [entity, value] of Object.entries(idlePositions)) {
-        // Only send defaults if no real data has arrived for this actuator yet
-        const key = `${entity}.actuator_state_commanded`;
-        if (!historyCache.has(key)) {
+    // Commanded actuator snapshot for current state (ACT_CMD.B*.CH* keys — same as [0x32] parser + GUI).
+    const snap = STATE_ACTUATOR_MAP[currentState];
+    if (snap) {
+        const t = Date.now();
+        for (const [actuatorName, value] of Object.entries(snap)) {
+            const cmdEntity = resolveActuatorCmdEntity(actuatorName);
+            if (!cmdEntity)
+                continue;
             send(ws, {
-                type: MessageType.SENSOR_UPDATE, timestamp: now,
-                payload: { entity, component: 'actuator_state_commanded', value, timestamp: now },
+                type: MessageType.SENSOR_UPDATE, timestamp: t,
+                payload: { entity: cmdEntity, component: 'actuator_state_commanded', value, timestamp: t },
             });
+            outboundMessages++;
+            lastOutboundAt = Date.now();
         }
     }
     // Historical data
     sendHistoricalData(ws);
+    outboundMessages++;
+    lastOutboundAt = Date.now();
     ws.on('message', (data) => {
+        inboundMessages++;
+        lastInboundAt = Date.now();
         try {
             const message = JSON.parse(data.toString());
             handleMessage(ws, message);
@@ -542,18 +626,43 @@ wss.on('connection', (ws) => {
             console.error('[ThinServer] Bad message:', err);
         }
     });
-    ws.on('close', () => console.log('[ThinServer] Client disconnected'));
-    ws.on('error', (err) => console.error('[ThinServer] WS error:', err.message));
+    ws.on('close', (code, reasonBuffer) => {
+        const reason = reasonBuffer?.toString() ?? '';
+        console.log(`[WS_BACKEND] ${JSON.stringify({
+            event: 'conn_close',
+            ts: Date.now(),
+            connId,
+            code,
+            reason,
+            lifetimeMs: Date.now() - openedAt,
+            inboundMessages,
+            outboundMessages,
+            lastInboundAt: lastInboundAt || null,
+            lastOutboundAt: lastOutboundAt || null,
+            wsClients: wss.clients.size,
+        })}`);
+    });
+    ws.on('error', (err) => {
+        console.error(`[WS_BACKEND] ${JSON.stringify({
+            event: 'conn_error',
+            ts: Date.now(),
+            connId,
+            readyState: ws.readyState,
+            message: err.message,
+        })}`);
+    });
 });
 function sendHistoricalData(ws) {
     const MAX_SEND_POINTS = 3000;
     const payload = {};
     for (const [key, series] of historyCache) {
-        const len = series.time.length;
-        if (len === 0)
+        if (series.len === 0)
             continue;
-        const start = len > MAX_SEND_POINTS ? len - MAX_SEND_POINTS : 0;
-        payload[key] = { time: series.time.slice(start), values: series.values.slice(start) };
+        const { time, values } = readHistorySeries(series);
+        const start = time.length > MAX_SEND_POINTS ? time.length - MAX_SEND_POINTS : 0;
+        payload[key] = start > 0
+            ? { time: time.slice(start), values: values.slice(start) }
+            : { time, values };
     }
     send(ws, { type: MessageType.HISTORICAL_DATA, timestamp: Date.now(), payload });
 }
@@ -593,25 +702,33 @@ function handleCommand(ws, command) {
             const targetState = command.data.state;
             const stateName = SystemState[targetState] ?? String(targetState);
             const csvName = STATE_TO_CSV_NAME[stateName] ?? stateName;
+            // Optimistic UI: reflect requested state immediately; roll back if sequencer rejects.
+            currentState = targetState;
+            broadcastStateUpdate();
+            // Actuator tiles read ACT_CMD.* from CSV snapshot — do not wait for actuator_service TCP
+            // (that round-trip was causing ~1–2s lag vs state buttons).
+            broadcastCommandedActuatorsForState(currentState);
+            if (targetState === SystemState.FIRE && prevState !== SystemState.FIRE) {
+                sendToControllerService('FIRE_START\n').catch(() => { });
+            }
+            else if (prevState === SystemState.FIRE && targetState !== SystemState.FIRE) {
+                sendToControllerService('FIRE_STOP\n').catch(() => { });
+            }
             sendToActuatorService(`TRANSITION:${csvName}\n`).then(({ ok, reply }) => {
                 console.log(`[ThinServer] State transition ${stateName} → ${csvName}: ${ok ? 'OK' : 'FAIL'} (${reply})`);
                 if (ok) {
-                    currentState = targetState;
-                    broadcastStateUpdate();
                     scheduleActuatorMismatchCheck(currentState);
-                    // Gate controller output by FIRE state parity.
-                    if (targetState === SystemState.FIRE && prevState !== SystemState.FIRE) {
-                        sendToControllerService('FIRE_START\n').then(({ ok: ctrlOk, reply: ctrlReply }) => {
-                            console.log(`[ThinServer] → controller_service FIRE_START: ${ctrlOk ? 'OK' : 'FAIL'} (${ctrlReply})`);
-                        }).catch(() => { });
-                    }
-                    else if (prevState === SystemState.FIRE && targetState !== SystemState.FIRE) {
-                        sendToControllerService('FIRE_STOP\n').then(({ ok: ctrlOk, reply: ctrlReply }) => {
-                            console.log(`[ThinServer] → controller_service FIRE_STOP: ${ctrlOk ? 'OK' : 'FAIL'} (${ctrlReply})`);
-                        }).catch(() => { });
-                    }
                 }
                 else {
+                    currentState = prevState;
+                    broadcastStateUpdate();
+                    broadcastCommandedActuatorsForState(prevState);
+                    if (prevState === SystemState.FIRE && targetState !== SystemState.FIRE) {
+                        sendToControllerService('FIRE_START\n').catch(() => { });
+                    }
+                    else if (targetState === SystemState.FIRE && prevState !== SystemState.FIRE) {
+                        sendToControllerService('FIRE_STOP\n').catch(() => { });
+                    }
                     send(ws, { type: MessageType.ERROR, timestamp: Date.now(), payload: { message: `State transition failed: ${reply}` } });
                 }
             });
@@ -620,11 +737,36 @@ function handleCommand(ws, command) {
         case 'actuator': {
             const open = command.data.actuatorState === 1 || command.data.actuatorState === 'open';
             const actuatorName = command.data.actuatorName;
+            const cmdEntity = resolveActuatorCmdEntity(actuatorName);
+            const v = open ? 1 : 0;
+            const pushActuatorCmdBroadcast = (val) => {
+                if (!cmdEntity)
+                    return;
+                const ts = Date.now();
+                const key = `${cmdEntity}.actuator_state_commanded`;
+                if (firstPacketTimeMs !== null) {
+                    const timeSec = (ts - firstPacketTimeMs) / 1000;
+                    if (timeSec >= 0 && timeSec < 86400)
+                        recordHistory(key, timeSec, val);
+                }
+                stats.sensorUpdatesBroadcast++;
+                broadcast({
+                    type: MessageType.SENSOR_UPDATE,
+                    timestamp: ts,
+                    payload: { entity: cmdEntity, component: 'actuator_state_commanded', value: val, timestamp: ts },
+                });
+            };
+            // Optimistic UI; debug manual commands keep the clicked value (sequencer does not re-CSV).
+            pushActuatorCmdBroadcast(v);
             sendToActuatorService(`ACTUATOR:${actuatorName}:${open ? 1 : 0}\n`).then(({ ok, reply }) => {
-                // No optimistic ACTUATOR_UPDATE broadcast — the sequencer publishes [0x32] to Elodin DB,
-                // which the backend receives and forwards as SENSOR_UPDATE with component 'actuator_state_commanded'.
                 if (!ok) {
+                    pushActuatorCmdBroadcast(open ? 0 : 1);
                     send(ws, { type: MessageType.ERROR, timestamp: Date.now(), payload: { message: `Actuator command failed: ${reply}` } });
+                    return;
+                }
+                // Non-debug: snap tiles to full state CSV. Debug: keep manual override (do not overwrite click).
+                if (!debugMode) {
+                    broadcastCommandedActuatorsForState(currentState);
                 }
             });
             break;
@@ -714,19 +856,25 @@ function sendToControllerService(line) {
 const elodin = new ElodinClient(ELODIN_HOST, ELODIN_PORT);
 const STATE_TO_CSV_NAME = {
     IDLE: 'Idle', ARMED: 'Armed', FUEL_FILL: 'Fuel Fill', OX_FILL: 'Ox Fill',
-    PRESS_STANDBY: 'Press Standby', GN2_LOW_PRESS: 'GN2 Low Press', GN2_VENT: 'GN2 Low Vent',
-    FUEL_PRESS: 'Fuel Press', FUEL_VENT: 'Fuel Vent', OX_PRESS: 'Ox Press', OX_VENT: 'Ox Vent',
-    GN2_HIGH_PRESS: 'GN2 High Press', GN2_HIGH_VENT: 'GN2 High Vent', CALIBRATE: 'Calibrate',
-    READY: 'Ready', FIRE: 'Fire', VENT: 'Vent',
-    ENGINE_ABORT: 'Engine Abort', GSE_ABORT: 'GSE Abort', EMERGENCY_ABORT: 'Emergency Abort',
-    ABORT: 'Emergency Abort', DEBUG: 'Idle',
+    PRESS_STANDBY: 'Press Standby',
+    GN2_LOW_PRESS: 'GN2 Low Press', GN2_VENT: 'GN2 Low Vent',
+    FUEL_PRESS: 'Fuel Press', FUEL_VENT: 'Fuel Vent',
+    OX_PRESS: 'Ox Press', OX_VENT: 'Ox Vent',
+    GN2_HIGH_PRESS: 'GN2 High Press', GN2_HIGH_VENT: 'GN2 High Vent',
+    CALIBRATE: 'Calibrate', READY: 'Ready', FIRE: 'Fire', VENT: 'Vent',
+    ENGINE_ABORT: 'Engine Abort', GSE_ABORT: 'GSE Abort',
+    EMERGENCY_ABORT: 'Emergency Abort', ABORT: 'Emergency Abort',
+    DEBUG: 'Idle',
 };
 // VTable resubscription — Elodin DB rejects subscriptions for VTables not yet
 // registered by other services (e.g., daq_bridge). Retry every 5s until all
 // expected packet groups flow.
 let resubscribeTimer = null;
 const MAX_RESUBSCRIBE_ATTEMPTS = 24;
+let shouldResubscribe = true;
 function scheduleResubscribe(attempt) {
+    if (!shouldResubscribe)
+        return;
     if (attempt > MAX_RESUBSCRIBE_ATTEMPTS)
         return;
     if (resubscribeTimer)
@@ -734,6 +882,8 @@ function scheduleResubscribe(attempt) {
     resubscribeTimer = setTimeout(() => {
         resubscribeTimer = null;
         if (!elodin.isConnected())
+            return;
+        if (!shouldResubscribe)
             return;
         registerVTables(elodin).then(() => {
             scheduleResubscribe(attempt + 1);
@@ -749,6 +899,7 @@ elodin.on('connected', () => {
         clearTimeout(resubscribeTimer);
         resubscribeTimer = null;
     }
+    shouldResubscribe = true;
     calibrationHost.elodin = elodin;
     registerVTables(elodin).then(() => {
         scheduleResubscribe(1);
@@ -812,12 +963,15 @@ elodin.on('packet', (header, payload) => {
             const stateVal = parsedList.find(p => p.component === 'state')?.value ?? 0;
             const bitmask = parsedList.find(p => p.component === 'allowedBitmask')?.value ?? 0;
             const debugModeVal = parsedList.find(p => p.component === 'debugMode')?.value ?? 0;
-            console.log(`[ThinServer] SequencerState from Elodin: state=${stateVal} bitmask=0x${bitmask.toString(16)} debug=${debugModeVal}`);
+            if (THIN_VERBOSE_CONNECTION_LOG) {
+                console.log(`[ThinServer] SequencerState from Elodin: state=${stateVal} bitmask=0x${bitmask.toString(16)} debug=${debugModeVal}`);
+            }
             stats.sequencerStatesReceived++;
             // Sync local state from Elodin (backup path — primary is TCP reply)
             currentState = stateVal;
             debugMode = debugModeVal === 1;
             broadcastStateUpdate();
+            broadcastCommandedActuatorsForState(currentState);
             scheduleActuatorMismatchCheck(currentState);
             if (currentState === SystemState.FIRE && prevState !== SystemState.FIRE) {
                 sendToControllerService('FIRE_START\n').catch(() => { });
@@ -848,8 +1002,15 @@ elodin.on('packet', (header, payload) => {
             // Set mission T+0 on first meaningful data packet.
             if (firstPacketTimeMs === null) {
                 firstPacketTimeMs = epochNow;
-                console.log(`[ThinServer] Mission T+0: ${new Date(firstPacketTimeMs).toISOString()}`);
+                if (THIN_VERBOSE_CONNECTION_LOG) {
+                    console.log(`[ThinServer] Mission T+0: ${new Date(firstPacketTimeMs).toISOString()}`);
+                }
                 broadcast({ type: MessageType.MISSION_START_TIME, timestamp: Date.now(), payload: { missionStartTime: firstPacketTimeMs } });
+                shouldResubscribe = false;
+                if (resubscribeTimer) {
+                    clearTimeout(resubscribeTimer);
+                    resubscribeTimer = null;
+                }
             }
             const key = `${parsed.entity}.${parsed.component}`;
             stats.relayEntityUpdatesReceived++;
@@ -871,10 +1032,29 @@ elodin.on('packet', (header, payload) => {
         console.error('[ThinServer] Packet error:', err);
     }
 });
+// ── Crash guards — keep the process alive on unhandled rejections ────────────
+// tsx watch would restart on source-file changes and compete for port 8081,
+// causing EADDRINUSE to bring down both instances. We use plain `tsx` (no watch)
+// in the startup script, but keep these guards as belt-and-suspenders.
+process.on('uncaughtException', (err) => {
+    console.error('[ThinServer] UNCAUGHT EXCEPTION — keeping server alive:', err);
+});
+process.on('unhandledRejection', (reason) => {
+    console.error('[ThinServer] UNHANDLED REJECTION — keeping server alive:', reason);
+});
 // ── Start ─────────────────────────────────────────────────────────────────────
 elodin.connect().then((ok) => {
     if (!ok) {
         console.warn('[ThinServer] Initial Elodin DB connect failed — will retry automatically');
+    }
+});
+httpServer.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        console.error(`[ThinServer] Port ${WS_PORT} already in use — another instance may be running. Retrying in 3s...`);
+        setTimeout(() => httpServer.listen(WS_PORT), 3000);
+    }
+    else {
+        console.error('[ThinServer] HTTP server error:', err);
     }
 });
 httpServer.listen(WS_PORT, () => {

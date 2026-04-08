@@ -8,7 +8,21 @@
  * 3. ACTUATOR_UPDATE messages arrive after sending actuator commands (multiple actuators)
  *    with round-trip command latency measurement
  *
- * Usage: tsx ws_data_flow_test.ts [ws_port] [api_port] [actuator_udp_port] [--verbose]
+ * Usage: tsx ws_data_flow_test.ts [ws_port] [api_port] [actuator_udp_port] [--verbose] [--only=<ids>]
+ * --verbose: Test 1 prints breakdowns, per-board counts, latency stats, Sensor Info contract
+ *   tables, and backend throughput; default is quiet (✅ lines + errors only).
+ * Or from repo root (starts services + passes --only through):
+ *   bash test/test_integration.sh --only=sensor_data
+ *
+ * --only runs a subset of tests (comma-separated). IDs: sensor_config, sensor_data,
+ * cal_stability, raw_cal_presence, heartbeat, board_status (Boards pane: all enabled boards connected),
+ * selftest, state_transition,
+ * state_debug, actuator_ws, actuator_udp, elodin_sync, controller — or numbers 1–6, 10–12
+ * (same as printed test labels). Env INTEGRATION_ONLY is equivalent to --only.
+ * Most IDs still need the full integration stack (Elodin, DAQ, calibration, backend);
+ * state/actuator/elodin_sync need sequencer; controller needs controller_service; selftest
+ * needs BOARD_STARTUP_SIM and ports.
+ *
  * Exit code: 0 = pass, 1 = fail
  */
 
@@ -42,9 +56,70 @@ const BACKEND_LOG_FILE = backendLogIdx >= 0 ? process.argv[backendLogIdx + 1] : 
 const controllerLogIdx = process.argv.indexOf('--controller-log');
 const CONTROLLER_LOG_FILE = controllerLogIdx >= 0 ? process.argv[controllerLogIdx + 1] : '';
 
+/** Subset of tests; null = run full suite */
+function parseOnlyTests(): Set<string> | null {
+  const fromEnv = process.env.INTEGRATION_ONLY?.trim();
+  const eq = process.argv.find(a => a.startsWith('--only='));
+  const fromEq = eq ? eq.slice('--only='.length).trim() : '';
+  const idx = process.argv.indexOf('--only');
+  const fromPos = idx >= 0 && process.argv[idx + 1] && !process.argv[idx + 1].startsWith('-')
+    ? process.argv[idx + 1].trim()
+    : '';
+  const raw = fromEq || fromPos || fromEnv || '';
+  if (!raw) return null;
+  const parts = raw.split(/[,\s]+/).map(x => x.trim().toLowerCase()).filter(Boolean);
+  const numToId: Record<string, string> = {
+    '1': 'sensor_data',
+    '2': 'state_transition',
+    '3': 'state_debug',
+    '4': 'actuator_ws',
+    '5': 'actuator_udp',
+    '6': 'elodin_sync',
+    '10': 'cal_stability',
+    '11': 'sensor_config',
+    '12': 'raw_cal_presence',
+  };
+  const out = new Set<string>();
+  for (const p of parts) {
+    let id = numToId[p] ?? p.replace(/-/g, '_');
+    if (id === 'raw_cal') id = 'raw_cal_presence';
+    out.add(id);
+  }
+  const allowed = new Set([
+    'sensor_config', 'sensor_data', 'cal_stability', 'raw_cal_presence',
+    'heartbeat', 'board_status', 'selftest',
+    'state_transition', 'state_debug', 'actuator_ws', 'actuator_udp', 'elodin_sync',
+    'controller',
+  ]);
+  for (const id of out) {
+    if (!allowed.has(id)) {
+      console.error(`❌ Unknown --only test id: "${id}". Allowed: ${[...allowed].sort().join(', ')}`);
+      process.exit(1);
+    }
+  }
+  return out;
+}
+
+const ONLY_TESTS = parseOnlyTests();
+
+function runTest(id: string): boolean {
+  return ONLY_TESTS === null || ONLY_TESTS.has(id);
+}
+
 const WS_URL = `ws://127.0.0.1:${WS_PORT}`;
 const SENSOR_TIMEOUT_MS = 5000;
 const COMMAND_TIMEOUT_MS = 5000;
+
+/**
+ * Each Sensor Info pane stream (entity.component with a finite value) must appear at least
+ * this many times in the Test 1 window. A channel with **no** finite updates fails the manifest
+ * as "missing" outright; this minimum also blocks a **single** stray SENSOR_UPDATE from counting
+ * as "present" when the stream is otherwise dead.
+ */
+const MIN_FINITE_SAMPLES_PER_SENSOR_STREAM = Math.max(
+  1,
+  parseInt(process.env.INTEGRATION_MIN_SENSOR_SAMPLES || '4', 10) || 4,
+);
 
 const TEST_DAQ_UDP_PORT = parseInt(process.env.TEST_DAQ_UDP_PORT || '5016', 10);
 const TEST_STARTUP_LISTEN_PORT = parseInt(process.env.TEST_STARTUP_LISTEN_PORT || '0', 10);
@@ -58,6 +133,19 @@ const INTEGRATION_SELFTEST_DEBUG = process.env.INTEGRATION_SELFTEST_DEBUG === '1
  * Override with INTEGRATION_SELFTEST_WS_MS on very slow hosts.
  */
 const SELF_TEST_WS_MS = parseInt(process.env.INTEGRATION_SELFTEST_WS_MS || '8000', 10);
+
+/** Window to collect BOARD_STATUS_UPDATE and see every enabled board as connected (matches Boards / Heartbeats UI). */
+const BOARD_STATUS_COLLECT_MS = parseInt(process.env.INTEGRATION_BOARD_STATUS_MS || '8000', 10);
+
+/** Board IDs skipped for Test 8 (e.g. integration_startup @ 60 — no heartbeat until Test 9 sim). Comma-separated env INTEGRATION_BOARD_STATUS_SKIP_IDS. */
+function boardStatusSkipIds(): Set<number> {
+  const raw = process.env.INTEGRATION_BOARD_STATUS_SKIP_IDS ?? '60';
+  const ids = raw
+    .split(/[,\s]+/)
+    .map((s) => parseInt(s.trim(), 10))
+    .filter((n) => !Number.isNaN(n));
+  return new Set(ids.length ? ids : [60]);
+}
 
 // Shared types (inline to avoid import issues)
 enum MessageType {
@@ -406,7 +494,7 @@ const EXPECTED_ENTITIES: string[] = [
   'TC1.CH2', 'TC1.CH3', 'TC1.CH4', 'TC1.CH5',
 
   // encoder_board (id 61, board_number 1) — 2 channels
-  'ENC1.CH1',
+  'ENC1.CH1', 'ENC1.CH2',
 
   // actuator_board_2 (id 12, board_number 2) — 10 channels
   'ACT2.CH1', 'ACT2.CH2', 'ACT2.CH3', 'ACT2.CH4', 'ACT2.CH5',
@@ -416,6 +504,255 @@ const EXPECTED_ENTITIES: string[] = [
   'ACT4.CH1', 'ACT4.CH2', 'ACT4.CH3', 'ACT4.CH4', 'ACT4.CH5',
   'ACT4.CH6', 'ACT4.CH7', 'ACT4.CH8', 'ACT4.CH9', 'ACT4.CH10',
 ];
+
+// ── Sensor Info pane · WebSocket contract (integration) ────────────────────
+// Asserts every useSensorValue(entity, component) on sensor-info/page.tsx has
+// received ≥1 SENSOR_UPDATE with a finite value in the collection window (cells
+// would not stay "---"). Covers both raw and calibrated columns per row.
+// Not asserted: Frontend Rate (client-side Hz), backend ingest header (HTTP /api/debug).
+
+function rawEntityToCalEntity(rawEntity: string): string {
+  const dot = rawEntity.indexOf('.');
+  if (dot < 0) return rawEntity;
+  const prefix = rawEntity.slice(0, dot);
+  const ch = rawEntity.slice(dot + 1);
+  return `${prefix}_Cal.${ch}`;
+}
+
+function rawComponentForSensorEntity(entity: string): string {
+  if (entity.startsWith('RTD')) return 'raw_resistance_counts';
+  return 'raw_adc_counts';
+}
+
+function calComponentForSensorEntity(entity: string): string | null {
+  if (entity.startsWith('PT')) return 'pressure_psi';
+  if (entity.startsWith('TC')) return 'temperature_c';
+  if (entity.startsWith('RTD')) return 'temperature_c';
+  if (entity.startsWith('LC')) return 'force_kg';
+  return null;
+}
+
+/** One row cell on the Sensor Info page (same as useSensorValue in page.tsx). */
+interface SensorInfoFieldCheck {
+  table: string;
+  column: string;
+  entity: string;
+  component: string;
+}
+
+interface SensorConfigApiRow {
+  entity: string;
+  calEntity: string;
+  isHpPt?: boolean;
+}
+
+function boardPaneShowsConnected(b: { connected?: boolean; operational?: boolean }): boolean {
+  return (b.operational ?? b.connected) === true;
+}
+
+/** GET /api/sensor-config — same PT/HPT entity names as the browser (when backend is up). */
+function fetchSensorConfigForSensorInfo(): Promise<{ sensors: SensorConfigApiRow[] } | null> {
+  return new Promise((resolve) => {
+    const req = http.get(`http://127.0.0.1:${API_PORT}/api/sensor-config`, (res) => {
+      let data = '';
+      res.on('data', (c) => { data += c; });
+      res.on('end', () => {
+        try {
+          const j = JSON.parse(data) as { sensors?: SensorConfigApiRow[] };
+          if (Array.isArray(j?.sensors) && j.sensors.length > 0) resolve({ sensors: j.sensors });
+          else resolve(null);
+        } catch {
+          resolve(null);
+        }
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.setTimeout(5000, () => { req.destroy(); resolve(null); });
+  });
+}
+
+/**
+ * Every raw + calibrated WebSocket field the Sensor Info tables render (not: Hz column, not header cards).
+ */
+function buildSensorInfoPaneFieldChecks(sensorApi: { sensors: SensorConfigApiRow[] } | null): SensorInfoFieldCheck[] {
+  const out: SensorInfoFieldCheck[] = [];
+
+  const ptFiltered = sensorApi?.sensors?.filter((s) => {
+    const cal = String(s.calEntity || '');
+    return cal.startsWith('PT_Cal.') || /^PT\d+_Cal\.CH\d+$/.test(cal);
+  });
+
+  if (ptFiltered && ptFiltered.length > 0) {
+    for (const s of ptFiltered) {
+      const table = s.isHpPt ? 'HPT' : 'PT';
+      out.push({ table, column: 'ADC code', entity: s.entity, component: 'raw_adc_counts' });
+      out.push({ table, column: 'Pressure (PSI)', entity: s.calEntity, component: 'pressure_psi' });
+    }
+  } else {
+    for (const ent of EXPECTED_ENTITIES) {
+      if (ent.startsWith('PT1.')) {
+        out.push({ table: 'PT', column: 'ADC code', entity: ent, component: 'raw_adc_counts' });
+        out.push({ table: 'PT', column: 'Pressure (PSI)', entity: rawEntityToCalEntity(ent), component: 'pressure_psi' });
+      } else if (ent.startsWith('PT2.')) {
+        out.push({ table: 'HPT', column: 'ADC code', entity: ent, component: 'raw_adc_counts' });
+        out.push({ table: 'HPT', column: 'Pressure (PSI)', entity: rawEntityToCalEntity(ent), component: 'pressure_psi' });
+      }
+    }
+  }
+
+  for (const ent of EXPECTED_ENTITIES) {
+    if (ent.startsWith('PT')) continue;
+    if (ent.startsWith('ENC')) {
+      out.push({
+        table: 'ENC',
+        column: 'Raw counts (° column is derived in browser)',
+        entity: ent,
+        component: 'raw_angle',
+      });
+      continue;
+    }
+    if (ent.startsWith('ACT')) {
+      out.push({ table: 'ACT', column: 'ADC code', entity: ent, component: 'raw_adc_counts' });
+      out.push({ table: 'ACT', column: 'Current (A)', entity: rawEntityToCalEntity(ent), component: 'current_a' });
+      continue;
+    }
+    const rawComp = rawComponentForSensorEntity(ent);
+    const calComp = calComponentForSensorEntity(ent);
+    if (!calComp) continue;
+    const calEnt = rawEntityToCalEntity(ent);
+    if (ent.startsWith('TC')) {
+      out.push({ table: 'TC', column: 'ADC code', entity: ent, component: rawComp });
+      out.push({ table: 'TC', column: 'Temp (°C)', entity: calEnt, component: calComp });
+    } else if (ent.startsWith('RTD')) {
+      out.push({ table: 'RTD', column: 'Raw resistance counts', entity: ent, component: rawComp });
+      out.push({ table: 'RTD', column: 'Temp (°C)', entity: calEnt, component: calComp });
+    } else if (ent.startsWith('LC')) {
+      out.push({ table: 'LC', column: 'ADC code', entity: ent, component: rawComp });
+      out.push({ table: 'LC', column: 'Force (kg)', entity: calEnt, component: calComp });
+    }
+  }
+
+  return out;
+}
+
+function bucketSensorInfoField(f: SensorInfoFieldCheck): string {
+  return `${f.table} · ${f.column}`;
+}
+
+function logSensorInfoPaneContractOverview(fields: SensorInfoFieldCheck[]): void {
+  const byBucket = new Map<string, number>();
+  for (const f of fields) {
+    const b = bucketSensorInfoField(f);
+    byBucket.set(b, (byBucket.get(b) ?? 0) + 1);
+  }
+  const lines: string[] = [
+    '',
+    '──────────────────────────────────────────────────────────────────',
+    'Sensor Info pane — fields checked (raw + calibrated per row)',
+    '──────────────────────────────────────────────────────────────────',
+    'Each line is one WebSocket stream (entity/component) that must appear once',
+    'in the window with a finite value. Same columns as /sensor-info tables.',
+    '',
+  ];
+  const keys = [...byBucket.keys()].sort((a, b) => a.localeCompare(b));
+  for (const k of keys) {
+    lines.push(`  ${k.padEnd(52)} ${String(byBucket.get(k) ?? 0).padStart(3)}`);
+  }
+  lines.push(`  ${'— TOTAL —'.padEnd(52)} ${String(fields.length).padStart(3)}`);
+  lines.push('──────────────────────────────────────────────────────────────────');
+  console.log(lines.join('\n'));
+}
+
+function formatMissingSensorInfoFields(
+  missingKeys: string[],
+  fields: SensorInfoFieldCheck[],
+): string {
+  const keyToField = new Map<string, SensorInfoFieldCheck>();
+  for (const f of fields) {
+    keyToField.set(`${f.entity}.${f.component}`, f);
+  }
+  const lines: string[] = ['  Missing (table · column · stream):'];
+  for (const mk of missingKeys) {
+    const f = keyToField.get(mk);
+    if (f) {
+      lines.push(`    · [${f.table}] ${f.column} → ${mk}`);
+    } else {
+      lines.push(`    · ${mk}`);
+    }
+  }
+  return lines.join('\n');
+}
+
+function countFiniteSensorUpdates(
+  updates: CollectedMessage[],
+  entity: string,
+  component: string,
+): number {
+  let n = 0;
+  for (const u of updates) {
+    const p = u.payload as { entity?: string; component?: string; value?: number };
+    if (p.entity === entity && p.component === component && Number.isFinite(p.value)) n++;
+  }
+  return n;
+}
+
+function assertSensorInfoParity(updates: CollectedMessage[], sensorApi: { sensors: SensorConfigApiRow[] } | null): void {
+  if (!sensorApi && VERBOSE) {
+    console.log('  Sensor Info: GET /api/sensor-config unavailable — PT/HPT expectations from EXPECTED_ENTITIES');
+  }
+
+  const streamFiniteCounts = new Map<string, number>();
+  for (const u of updates) {
+    const { entity, component, value } = u.payload as {
+      entity?: string;
+      component?: string;
+      value?: number;
+    };
+    if (!entity || !component || !Number.isFinite(value)) continue;
+    const k = `${entity}.${component}`;
+    streamFiniteCounts.set(k, (streamFiniteCounts.get(k) ?? 0) + 1);
+  }
+
+  const fields = buildSensorInfoPaneFieldChecks(sensorApi);
+
+  const missingKeys: string[] = [];
+  const shortStreams: { key: string; got: number; need: number }[] = [];
+  for (const f of fields) {
+    const k = `${f.entity}.${f.component}`;
+    const n = streamFiniteCounts.get(k) ?? 0;
+    if (n === 0) missingKeys.push(k);
+    else if (n < MIN_FINITE_SAMPLES_PER_SENSOR_STREAM) {
+      shortStreams.push({ key: k, got: n, need: MIN_FINITE_SAMPLES_PER_SENSOR_STREAM });
+    }
+  }
+
+  if (missingKeys.length > 0 || shortStreams.length > 0) {
+    logSensorInfoPaneContractOverview(fields);
+    if (missingKeys.length > 0) {
+      console.error('\n' + formatMissingSensorInfoFields(missingKeys, fields) + '\n');
+    }
+    if (shortStreams.length > 0) {
+      const keyToField = new Map<string, SensorInfoFieldCheck>();
+      for (const f of fields) keyToField.set(`${f.entity}.${f.component}`, f);
+      const lines = ['  Under-sampled streams (need ≥' + MIN_FINITE_SAMPLES_PER_SENSOR_STREAM + ' finite updates each):'];
+      for (const s of shortStreams) {
+        const f = keyToField.get(s.key);
+        const where = f ? `[${f.table}] ${f.column}` : s.key;
+        lines.push(`    · ${where} → ${s.key} (got ${s.got}, need ${s.need})`);
+      }
+      console.error('\n' + lines.join('\n') + '\n');
+    }
+  } else if (VERBOSE) {
+    logSensorInfoPaneContractOverview(fields);
+  }
+
+  assert(
+    missingKeys.length === 0 && shortStreams.length === 0,
+    missingKeys.length === 0 && shortStreams.length === 0
+      ? `Sensor Info: all ${fields.length} streams (raw + cal) each had ≥${MIN_FINITE_SAMPLES_PER_SENSOR_STREAM} finite updates`
+      : `Sensor Info: ${missingKeys.length} missing and ${shortStreams.length} under-sampled stream(s) — see above`,
+  );
+}
 
 // ── Test 1: Sensor Data Flow ─────────────────────────────────────────────────
 
@@ -442,7 +779,7 @@ function fetchBackendStats(): Promise<BackendStats | null> {
 }
 
 async function testSensorDataFlow(ws: WebSocket): Promise<void> {
-  console.log('\n📡 Test 1: Sensor Data Flow (fake data → DAQ bridge → Elodin → relay → backend → WS)');
+  console.log('\n📡 Test 1: Sensor Data Flow');
 
   // Subscribe to all channel types. Channels go up to 20 because boards of
   // the same type use channel_offset to create a global namespace:
@@ -470,7 +807,7 @@ async function testSensorDataFlow(ws: WebSocket): Promise<void> {
   // Snapshot backend stats before the window so we can compute a delta.
   const statsAtWindowStart = IS_THIN ? await fetchBackendStats() : null;
 
-  console.log('  Collecting sensor updates for 5s...');
+  if (VERBOSE) console.log('  Collecting sensor updates (5s window)…');
   const updates = await collectMessages(ws, MessageType.SENSOR_UPDATE, SENSOR_TIMEOUT_MS);
 
   const statsAtWindowEnd = IS_THIN ? await fetchBackendStats() : null;
@@ -493,10 +830,11 @@ async function testSensorDataFlow(ws: WebSocket): Promise<void> {
     typeBreakdown[typePrefix].count++;
   }
 
-  // Print breakdown
-  console.log(`\n  Sensor data breakdown (${updates.length} total updates, ${entities.size} entities):`);
-  for (const [prefix, info] of Object.entries(typeBreakdown).sort()) {
-    console.log(`    ${prefix.replace('.', '').padEnd(8)} ${info.count.toString().padStart(5)} updates across ${info.entities.size} channels: ${[...info.entities].sort().join(', ')}`);
+  if (VERBOSE) {
+    console.log(`\n  Sensor data breakdown (${updates.length} updates, ${entities.size} entities):`);
+    for (const [prefix, info] of Object.entries(typeBreakdown).sort()) {
+      console.log(`    ${prefix.replace('.', '').padEnd(8)} ${info.count.toString().padStart(5)} updates / ${info.entities.size} ch: ${[...info.entities].sort().join(', ')}`);
+    }
   }
 
   // ── Assertions: verify EVERY expected entity was received ──
@@ -515,10 +853,26 @@ async function testSensorDataFlow(ws: WebSocket): Promise<void> {
       ? `All ${EXPECTED_ENTITIES.length}/${EXPECTED_ENTITIES.length} expected entities received`
       : `${received.length}/${EXPECTED_ENTITIES.length} expected entities received — MISSING: ${missing.join(', ')}`);
 
-  // Report any extra entities received beyond what we expected (e.g. ACT, PT_Cal)
+  const sensorApi = await fetchSensorConfigForSensorInfo();
+  assertSensorInfoParity(updates, sensorApi);
+
+  // B61 encoder: Sensor Info "Encoder 1" / "Encoder 2" rows use ENC1.CH1 / ENC1.CH2 + raw_angle.
+  // If CH2 is literally empty in the UI, the stream below has zero finite samples — parity also fails,
+  // but this assertion names the board/row explicitly in the log.
+  for (const ch of [1, 2] as const) {
+    const ent = `ENC1.CH${ch}`;
+    const n = countFiniteSensorUpdates(updates, ent, 'raw_angle');
+    assert(
+      n >= MIN_FINITE_SAMPLES_PER_SENSOR_STREAM,
+      n >= MIN_FINITE_SAMPLES_PER_SENSOR_STREAM
+        ? `B61 Encoder ${ch} (${ent}.raw_angle): ≥${MIN_FINITE_SAMPLES_PER_SENSOR_STREAM} finite updates`
+        : `B61 Encoder ${ch} (Sensor Info row): ${ent}.raw_angle — ${n} finite WS updates (need ≥${MIN_FINITE_SAMPLES_PER_SENSOR_STREAM}; 0 means no CH${ch} data reached the client)`,
+    );
+  }
+
   const extraEntities = sortedEntities.filter(e => !EXPECTED_ENTITIES.includes(e));
-  if (extraEntities.length > 0) {
-    console.log(`  Extra entities beyond expected (${extraEntities.length}): ${extraEntities.join(', ')}`);
+  if (extraEntities.length > 0 && VERBOSE) {
+    console.log(`  Extra entities (${extraEntities.length}): ${extraEntities.join(', ')}`);
   }
 
   // ── Zero packet loss verification ──
@@ -534,7 +888,7 @@ async function testSensorDataFlow(ws: WebSocket): Promise<void> {
     'rtd_board (B1)': ['RTD1.CH1', 'RTD1.CH2', 'RTD1.CH3', 'RTD1.CH4'],
     'lc_board_2 (B2)': ['LC2.CH1', 'LC2.CH2', 'LC2.CH6'],
     'tc_board (B1)': ['TC1.CH2', 'TC1.CH3', 'TC1.CH4', 'TC1.CH5'],
-    'encoder_board (B1)': ['ENC1.CH1'],
+    'encoder_board (B1)': ['ENC1.CH1', 'ENC1.CH2'],
     'actuator_board_2 (B2)': [
       'ACT2.CH1', 'ACT2.CH2', 'ACT2.CH3', 'ACT2.CH4', 'ACT2.CH5',
       'ACT2.CH6', 'ACT2.CH7', 'ACT2.CH8', 'ACT2.CH9', 'ACT2.CH10',
@@ -558,15 +912,6 @@ async function testSensorDataFlow(ws: WebSocket): Promise<void> {
     const maxCount = Math.max(...counts);
     const minCount = Math.min(...counts);
 
-    // Print per-entity counts for this board
-    console.log(`\n  ${boardName} (${maxCount} packets received):`);
-    for (const e of boardEntities) {
-      const count = entityCounts[e] || 0;
-      const withinSpec = maxCount > 0 && count / maxCount >= 0.85;
-      const status = withinSpec ? '✅' : '❌';
-      console.log(`    ${status} ${e}: ${count}/${maxCount}`);
-    }
-
     const dropped = boardEntities.reduce((sum, e) => sum + (maxCount - (entityCounts[e] || 0)), 0);
     const totalExpected = maxCount * boardEntities.length;
     const totalReceived = totalExpected - dropped;
@@ -574,23 +919,29 @@ async function testSensorDataFlow(ws: WebSocket): Promise<void> {
     const deliveryPct = totalExpected > 0 ? (totalReceived / totalExpected) * 100 : 0;
     totalDropped += dropped;
 
-    // 85% delivery threshold — small drops are expected because the WS test's
-    // collection window doesn't align perfectly with when the simulator starts/stops
-    // sending. Packets in flight at window boundaries may be counted for some
-    // channels but not others, causing per-entity count skew of a few updates.
-    // Keep threshold tolerant of collection-window edge effects under CI/load.
-    const DELIVERY_THRESHOLD_PCT = 80;
-    const passed = deliveryPct >= DELIVERY_THRESHOLD_PCT;
+    // Strict per-channel parity: every entity on a board must see the same number of
+    // SENSOR_UPDATE messages in the window. (A channel with **zero** updates fails earlier via
+    // EXPECTED_ENTITIES / Sensor Info parity; this catches skew between channels that still
+    // had some traffic.)
+    const passed = maxCount === 0 ? false : dropped === 0;
+    if (!passed || VERBOSE) {
+      console.log(`\n  ${boardName} (${maxCount} max updates per ch):`);
+      for (const e of boardEntities) {
+        const count = entityCounts[e] || 0;
+        const withinSpec = maxCount > 0 && count === maxCount;
+        const status = withinSpec ? '✅' : '❌';
+        console.log(`    ${status} ${e}: ${count}/${maxCount}`);
+      }
+    }
     assert(passed,
       maxCount === 0
         ? `${boardName}: 0 updates received — board sent no data`
         : dropped === 0
           ? `${boardName}: 0 dropped — all ${boardEntities.length} channels received ${maxCount} updates each`
-          : `${boardName}: ${dropped} updates dropped (${deliveryPct.toFixed(1)}% delivery) — counts range ${minCount}-${maxCount}${passed ? ' (within tolerance)' : ''}`);
+          : `${boardName}: per-channel update counts differ (${deliveryPct.toFixed(1)}% delivery) — need min===max (${minCount}-${maxCount}), ${dropped} short`);
   }
 
-  // Total update count — just report, no arbitrary minimum
-  console.log(`  Total updates received (WS client): ${updates.length}`);
+  if (VERBOSE) console.log(`  WS client: ${updates.length} SENSOR_UPDATE messages in window`);
 
   // Write per-entity received counts to file for comparison with simulator stats
   if (RECEIVED_STATS_FILE) {
@@ -616,11 +967,9 @@ async function testSensorDataFlow(ws: WebSocket): Promise<void> {
       .map((u) => u.receivedAt - u.payload.timestamp)
       .filter((l) => l >= 0 && l < 60000);
 
-    printLatencyStats('Pipeline Latency (message timestamp → WS client receive)', latencies);
-
-    // Per-type latency breakdown
     if (VERBOSE) {
-      for (const [prefix, info] of Object.entries(typeBreakdown).sort()) {
+      printLatencyStats('Pipeline Latency (message timestamp → WS client receive)', latencies);
+      for (const [prefix] of Object.entries(typeBreakdown).sort()) {
         const typeUpdates = updates.filter((u) => u.payload.entity.startsWith(prefix));
         const typeLatencies = typeUpdates
           .map((u) => u.receivedAt - u.payload.timestamp)
@@ -639,10 +988,10 @@ async function testSensorDataFlow(ws: WebSocket): Promise<void> {
     const broadcast = statsAtWindowEnd.sensorUpdatesBroadcast - statsAtWindowStart.sensorUpdatesBroadcast;
     const wsDelivery = broadcast > 0 ? (updates.length / broadcast * 100).toFixed(1) : '0.0';
 
-    console.log(`\n  Backend throughput (${SENSOR_TIMEOUT_MS / 1000}s window):`);
-    console.log(`    ${received.toLocaleString()} sensor updates ingested from Elodin (full rate)`);
-    console.log(`    ${broadcast.toLocaleString()} sent to frontend after 10 Hz throttle`);
-    console.log(`    ${updates.length.toLocaleString()} received by test client`);
+    if (VERBOSE) {
+      console.log(`\n  Backend throughput (${SENSOR_TIMEOUT_MS / 1000}s window):`);
+      console.log(`    ${received.toLocaleString()} ingested from Elodin · ${broadcast.toLocaleString()} WS broadcasts · ${updates.length.toLocaleString()} received by test`);
+    }
 
     assert(received > 0, `Elodin → backend: data flowing (${received.toLocaleString()} updates)`);
     assert(received >= broadcast, `No phantom broadcasts (${broadcast.toLocaleString()} sent ≤ ${received.toLocaleString()} ingested)`);
@@ -981,16 +1330,14 @@ async function testUdpActuatorCommands(): Promise<void> {
 async function testCalibratedDataStability(ws: WebSocket): Promise<void> {
   console.log('\n📊 Test 10: Calibrated Data Stability (spike detection)');
 
-  // Calibrated entities we expect (from calibration_service defaults)
-  // Board-namespaced calibrated prefixes: PT1_Cal, PT2_Cal, etc.
+  // Calibrated entities we expect (from calibration_service defaults).
+  // Omit ACT*_Cal.current_a: sim currents vary in normal operation (Test 1 checks presence/parity).
   const CALIBRATED_COMPONENTS: Record<string, string> = {
     'PT1_Cal': 'pressure_psi',
     'PT2_Cal': 'pressure_psi',
     'TC1_Cal': 'temperature_c',
     'RTD1_Cal': 'temperature_c',
     'LC2_Cal': 'force_kg',
-    'ACT2_Cal': 'current_a',
-    'ACT4_Cal': 'current_a',
   };
 
   // Collect calibrated SENSOR_UPDATE values for 8 seconds
@@ -1152,14 +1499,61 @@ async function testServerHeartbeatUdp(): Promise<void> {
 
 async function testBoardStatusToFrontend(ws: WebSocket): Promise<void> {
   if (!IS_THIN) return;
-  console.log('\n📬 Test 8: BOARD_STATUS_UPDATE (thin backend)');
-  const msgs = await collectMessages(ws, MessageType.BOARD_STATUS_UPDATE, 6000);
-  const saw = msgs.some(
-    (m) =>
-      Array.isArray(m.payload?.boards) &&
-      m.payload.boards.some((b: { boardState?: number }) => typeof b.boardState === 'number'),
+  console.log('\n📬 Test 8: BOARD_STATUS_UPDATE — Boards pane (all expected boards connected)');
+  const skipIds = boardStatusSkipIds();
+  const msgs = await collectMessages(ws, MessageType.BOARD_STATUS_UPDATE, BOARD_STATUS_COLLECT_MS);
+
+  type BoardRow = {
+    id?: number;
+    expected?: boolean;
+    type?: string;
+    connected?: boolean;
+    operational?: boolean;
+  };
+  let lastBoards: BoardRow[] | null = null;
+  for (const m of msgs) {
+    const list = m.payload?.boards as BoardRow[] | undefined;
+    if (Array.isArray(list) && list.length > 0) lastBoards = list;
+  }
+
+  if (!lastBoards || lastBoards.length === 0) {
+    assert(false, 'BOARD_STATUS: no BOARD_STATUS_UPDATE with non-empty boards[]');
+    return;
+  }
+
+  const expectedBoards = lastBoards.filter(
+    (b) =>
+      b.expected === true &&
+      typeof b.id === 'number' &&
+      !skipIds.has(b.id),
   );
-  assert(saw, 'BOARD_STATUS_UPDATE: at least one board with numeric boardState');
+
+  if (expectedBoards.length === 0) {
+    assert(false, 'BOARD_STATUS: no boards with expected=true (thin server should preload config boards)');
+    return;
+  }
+
+  const notConnected: number[] = [];
+  for (const b of expectedBoards) {
+    if (!boardPaneShowsConnected(b)) notConnected.push(b.id!);
+  }
+
+  if (VERBOSE || notConnected.length > 0) {
+    const lines = expectedBoards.map((b) => {
+      const ok = boardPaneShowsConnected(b);
+      return `    board_id ${b.id} (${b.type ?? '?'}): ${ok ? 'connected' : 'disconnected'}`;
+    });
+    console.log(
+      `  Last snapshot (${msgs.length} msgs / ${BOARD_STATUS_COLLECT_MS}ms, ${expectedBoards.length} expected boards${skipIds.size ? `; skip ids ${[...skipIds].join(',')}` : ''}):\n${lines.join('\n')}`,
+    );
+  }
+
+  assert(
+    notConnected.length === 0,
+    notConnected.length === 0
+      ? `Boards pane: all ${expectedBoards.length} config board(s) show connected (operational ?? connected)`
+      : `Boards pane: not connected — board_id(s): ${notConnected.join(', ')}`,
+  );
 }
 
 // ── Test 9: Board startup → SELF_TEST → SENSOR_UPDATE ─────────────────────────
@@ -1482,6 +1876,9 @@ async function testControllerDataFlow(): Promise<void> {
 async function main(): Promise<void> {
   console.log('🧪 WebSocket Data Flow Integration Test');
   console.log(`   Backend: ${WS_URL} (${IS_THIN ? 'server.ts' : 'server-legacy.ts'})`);
+  if (ONLY_TESTS) {
+    console.log(`   --only: ${[...ONLY_TESTS].sort().join(', ')}`);
+  }
   if (IS_THIN) {
     console.log(`   sequencer_service: ${HAS_SEQUENCER ? 'available' : 'not found — command tests will be skipped'}`);
     console.log(`   controller_service: ${HAS_CONTROLLER ? 'available' : 'not found — controller tests will be skipped'}`);
@@ -1499,32 +1896,49 @@ async function main(): Promise<void> {
 
   const canRunCommandTests = !IS_THIN || HAS_SEQUENCER;
 
+  if (ONLY_TESTS) {
+    const needsSeq = ['state_transition', 'state_debug', 'actuator_ws', 'actuator_udp', 'elodin_sync']
+      .some(id => ONLY_TESTS!.has(id));
+    if (needsSeq && !canRunCommandTests) {
+      console.error('❌ Selected tests require sequencer_service (integration must start sequencer or pass --has-sequencer)');
+      process.exit(1);
+    }
+    if (ONLY_TESTS.has('controller') && !HAS_CONTROLLER) {
+      console.error('❌ Selected tests include controller but controller_service was not started');
+      process.exit(1);
+    }
+    if (ONLY_TESTS.has('selftest') && !IS_THIN) {
+      console.error('❌ selftest is only defined for thin backend');
+      process.exit(1);
+    }
+  }
+
   try {
-    await testSensorConfigEntityFormat();
-    await testSensorDataFlow(ws);
-    await testRawAndCalibratedPresence(ws);
-    await testCalibratedDataStability(ws);
+    if (runTest('sensor_config')) await testSensorConfigEntityFormat();
+    if (runTest('sensor_data')) await testSensorDataFlow(ws);
+    if (runTest('raw_cal_presence')) await testRawAndCalibratedPresence(ws);
+    if (runTest('cal_stability')) await testCalibratedDataStability(ws);
     if (IS_THIN) {
-      await testServerHeartbeatUdp();
-      await testBoardStatusToFrontend(ws);
-      await testBoardStartupSelfTestToFrontend(ws);
+      if (runTest('heartbeat')) await testServerHeartbeatUdp();
+      if (runTest('board_status')) await testBoardStatusToFrontend(ws);
+      if (runTest('selftest')) await testBoardStartupSelfTestToFrontend(ws);
     }
     if (canRunCommandTests) {
-      await testStateTransition(ws);
-      await testStateTransitionDebugMode(ws);
-      await testActuatorCommands(ws);
-      await testUdpActuatorCommands();
-      await testElodinStateSync();
-    } else {
+      if (runTest('state_transition')) await testStateTransition(ws);
+      if (runTest('state_debug')) await testStateTransitionDebugMode(ws);
+      if (runTest('actuator_ws')) await testActuatorCommands(ws);
+      if (runTest('actuator_udp')) await testUdpActuatorCommands();
+      if (runTest('elodin_sync')) await testElodinStateSync();
+    } else if (!ONLY_TESTS) {
       console.log('\n🔄 Test 2: State Transition — SKIPPED (thin backend requires sequencer_service)');
       console.log('🔄 Test 3: State Transition Debug Mode — SKIPPED');
       console.log('🔄 Test 4: Actuator Commands — SKIPPED');
       console.log('📬 Test 5: UDP Actuator Commands — SKIPPED');
       console.log('📬 Test 6: Elodin State Sync — SKIPPED');
     }
-    if (HAS_CONTROLLER) {
+    if (HAS_CONTROLLER && runTest('controller')) {
       await testControllerDataFlow();
-    } else {
+    } else if (!ONLY_TESTS && !HAS_CONTROLLER) {
       console.log('\n📡 Test: Controller Data Flow — SKIPPED (controller_service not found)');
     }
   } finally {

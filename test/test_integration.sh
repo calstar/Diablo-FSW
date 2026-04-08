@@ -92,6 +92,7 @@ kill_stale_integration_processes() {
     pkill -9 -f "elodin.*integration_test" 2>/dev/null || true
     [ -n "$label" ] && echo "  $label: killed $killed stale process group(s)"
   fi
+  return 0
 }
 
 cleanup() {

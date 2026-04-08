@@ -3,6 +3,7 @@
 
 set(FSW_SOURCES
     src/util/IpFromMac.cpp
+    src/config/LoadActiveBoards.cpp
     src/config/BoardDiscovery.cpp
     src/config/DynamicConfigManager.cpp
     src/config/SensorAssignment.cpp

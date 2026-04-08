@@ -196,7 +196,6 @@ $RECYCLE.BIN/
 # Local configuration overrides
 config_local.toml
 *_local.toml
-config/config.toml.auto
 .cache/
 
 # Next.js build artifacts

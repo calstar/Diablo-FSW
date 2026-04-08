@@ -11,6 +11,7 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <mutex>
 #include <sstream>
 #include <thread>
 
@@ -299,7 +300,11 @@ bool ActuatorCommander::sendUDP(const std::string& board_ip,
         cmds.push_back({id, st});
 
     uint8_t buf[512];
-    size_t len = Diablo::create_actuator_command_packet(cmds, 0, buf, sizeof(buf));
+    uint32_t ts_ms = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                               std::chrono::steady_clock::now().time_since_epoch())
+                                               .count() &
+                                           0xFFFFFFFFu);
+    size_t len = Diablo::create_actuator_command_packet(cmds, ts_ms, buf, sizeof(buf));
     if (len == 0) {
         std::cerr << "[ActuatorCommander] create_actuator_command_packet returned 0" << std::endl;
         return false;
@@ -350,9 +355,8 @@ void ActuatorCommander::applyForState(State state) {
 
     const bool is_fire = (state == State::FIRE);
 
-    // Group commands by board IP and collect logical positions for DB publishing
     std::map<std::string, std::vector<std::pair<uint8_t, uint8_t>>> by_board;
-    std::vector<std::pair<uint8_t, uint8_t>> logical_commands;  // channel, logical_pos
+    std::vector<std::pair<uint8_t, uint8_t>> logical_commands;
     std::unique_lock lock(overrides_mutex_);
     for (const auto& [act_name, logical_pos] : it->second) {
         auto role_it = roles_.find(act_name);
@@ -360,9 +364,8 @@ void ActuatorCommander::applyForState(State state) {
             continue;
         const ActuatorRole& role = role_it->second;
         if (is_fire && role.is_pwm)
-            continue;  // skipped: controlled by controller_service
+            continue;
 
-        // Manual override takes precedence
         int pos = logical_pos;
         auto ov = manual_overrides_.find(act_name);
         if (ov != manual_overrides_.end())
@@ -370,7 +373,6 @@ void ActuatorCommander::applyForState(State state) {
 
         uint8_t hw_state = static_cast<uint8_t>(role.is_no ? (1 - pos) : pos);
         by_board[role.board_ip].emplace_back(static_cast<uint8_t>(role.channel), hw_state);
-        // Global channel: (board_id - 11) * 10 + channel → unique across all actuator boards
         uint8_t global_ch =
             actuator_elodin_low_byte(role.board_id, static_cast<uint8_t>(role.channel));
         logical_commands.emplace_back(global_ch, static_cast<uint8_t>(pos));
@@ -451,16 +453,23 @@ bool ActuatorCommander::sendSingleActuator(const std::string& name, int pos) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Manual overrides
+// Manual overrides (debug)
 // ─────────────────────────────────────────────────────────────────────────────
 void ActuatorCommander::setManualOverride(const std::string& name, int pos) {
+    // Use canonical role key from config (CSV / applyForState use the same spelling).
+    std::string key = name;
+    auto it = roles_.find(name);
+    if (it == roles_.end()) {
+        const std::string lower = toLower(name);
+        for (auto jt = roles_.begin(); jt != roles_.end(); ++jt) {
+            if (toLower(jt->first) == lower) {
+                key = jt->first;
+                break;
+            }
+        }
+    }
     std::lock_guard lock(overrides_mutex_);
-    manual_overrides_[name] = pos;
-}
-
-void ActuatorCommander::clearManualOverride(const std::string& name) {
-    std::lock_guard lock(overrides_mutex_);
-    manual_overrides_.erase(name);
+    manual_overrides_[key] = pos;
 }
 
 void ActuatorCommander::clearAllManualOverrides() {

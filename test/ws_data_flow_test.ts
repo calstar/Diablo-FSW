@@ -1677,6 +1677,56 @@ async function testBoardStartupSelfTestToFrontend(ws: WebSocket): Promise<void> 
   }
 }
 
+// ── Test 13: Self-test replay on late connect ─────────────────────────────────
+// A browser that connects AFTER boards have already sent self-test packets must
+// still see the results (they're one-shot events during SETUP). The backend
+// replays them as SENSOR_UPDATE on connect. This test opens a *fresh* WS client
+// after Test 9 has already run and verifies it receives SELF_TEST.BOARD_60.
+
+async function testSelfTestReplayOnLateConnect(): Promise<void> {
+  if (!IS_THIN || SKIP_STARTUP_E2E) return;
+  if (!BOARD_STARTUP_SIM || TEST_STARTUP_LISTEN_PORT <= 0) {
+    console.log('\n📬 Test 13: Self-test replay on late connect — SKIPPED (no startup sim)');
+    return;
+  }
+
+  console.log('\n📬 Test 13: Self-test replay on late connect (fresh WS after SELF_TEST)');
+
+  let ws2: WebSocket | null = null;
+  try {
+    ws2 = await connectWS();
+    const selfTestKeys = new Map<string, number>();
+    const collectMs = 3000;
+
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, collectMs);
+      ws2!.on('message', (data: WebSocket.Data) => {
+        try {
+          const msg: WSMessage = JSON.parse(data.toString());
+          if (msg.type !== MessageType.SENSOR_UPDATE) return;
+          const p = msg.payload as any;
+          if (typeof p.entity === 'string' && p.entity.startsWith('SELF_TEST.')) {
+            selfTestKeys.set(`${p.entity}.${p.component}`, p.value);
+          }
+        } catch { /* ignore */ }
+      });
+    });
+
+    if (selfTestKeys.size === 0) {
+      assert(false, 'Late-connect WS received 0 self-test SENSOR_UPDATE replays (backend must send selfTestLatest on connect)');
+      return;
+    }
+
+    const board60Keys = [...selfTestKeys.entries()].filter(([k]) => k.startsWith('SELF_TEST.BOARD_60.'));
+    assert(board60Keys.length > 0, `Late-connect received ${selfTestKeys.size} self-test keys (${board60Keys.length} for board 60)`);
+
+    const sensor2 = selfTestKeys.get('SELF_TEST.BOARD_60.sensor_2');
+    assert(sensor2 === 1, `Late-connect SELF_TEST.BOARD_60.sensor_2 = ${sensor2} (expected 1 = pass)`);
+  } finally {
+    if (ws2 && ws2.readyState <= WebSocket.OPEN) ws2.close();
+  }
+}
+
 // ── Test 11: Sensor Config Entity Format ──────────────────────────────────────
 // Verify that /api/sensor-config returns generic channel-based entity names
 // (PT.CH1, TC_Cal.CH2) and NOT role-based names (PT.Fuel_Upstream).
@@ -1922,6 +1972,7 @@ async function main(): Promise<void> {
       if (runTest('heartbeat')) await testServerHeartbeatUdp();
       if (runTest('board_status')) await testBoardStatusToFrontend(ws);
       if (runTest('selftest')) await testBoardStartupSelfTestToFrontend(ws);
+      if (runTest('selftest_replay')) await testSelfTestReplayOnLateConnect();
     }
     if (canRunCommandTests) {
       if (runTest('state_transition')) await testStateTransition(ws);

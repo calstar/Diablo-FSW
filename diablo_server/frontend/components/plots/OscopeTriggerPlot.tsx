@@ -5,6 +5,8 @@ import uPlot from 'uplot';
 import 'uplot/dist/uPlot.min.css';
 import { getWebSocketClient } from '@/lib/websocket';
 import { MessageType, SensorUpdate } from '@/lib/types';
+import { SENSOR_DATA_STALE_MS } from '@/lib/sensor-rate';
+import { useStaleRenderTick } from '@/lib/store';
 
 export const RAW_TO_DEG = 360.0 / 4096.0;
 export const rawToDeg = (raw: number) => (raw & 0x0FFF) * RAW_TO_DEG;
@@ -104,6 +106,9 @@ export default function OscopeTriggerPlot() {
 
   const latestEnc1 = useRef<number>(NaN);
   const latestEnc2 = useRef<number>(NaN);
+  const lastEncoderPacketMsRef = useRef<number | null>(null);
+
+  const staleClock = useStaleRenderTick();
 
   const setState = useCallback((s: TriggerState) => {
     triggerStateRef.current = s;
@@ -156,6 +161,8 @@ export default function OscopeTriggerPlot() {
       if (e === 'ENC1.CH1' || e === 'ENC.CH1') latestEnc1.current = rawToDeg(update.value);
       else if (e === 'ENC1.CH2' || e === 'ENC.CH2') latestEnc2.current = rawToDeg(update.value);
       else return;
+
+      lastEncoderPacketMsRef.current = Date.now();
 
       if (triggerStateRef.current === 'TRIGGERED') return;
 
@@ -213,6 +220,23 @@ export default function OscopeTriggerPlot() {
     return () => unsub();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setState]);
+
+  // Clear live ARMED preview when encoder packets stop (same stale window as dashboard).
+  useEffect(() => {
+    const last = lastEncoderPacketMsRef.current;
+    if (last == null) return;
+    if (Date.now() - last < SENSOR_DATA_STALE_MS) return;
+    if (triggerStateRef.current !== 'ARMED') return;
+    circularBuffer.current = [];
+    baselineEnc1.current = [];
+    baselineEnc2.current = [];
+    latestEnc1.current = NaN;
+    latestEnc2.current = NaN;
+    const plot = uplotRef.current;
+    if (plot) {
+      plot.setData([new Float64Array(0), new Float64Array(0), new Float64Array(0)]);
+    }
+  }, [staleClock]);
 
   const analyzeAndRender = useCallback((captured: Sample[], tTrig: number) => {
     if (captured.length < 4) return;

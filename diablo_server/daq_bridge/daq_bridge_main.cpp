@@ -678,7 +678,8 @@ int main(int argc, char* argv[]) {
                     }
 
                     for (const auto& res : st_packet.results) {
-                        if (res.sensor_id == 0) continue;
+                        if (res.sensor_id == 0)
+                            continue;
                         uint8_t high = static_cast<uint8_t>(0x60 + (res.sensor_id & 0x0F));
                         std::array<uint8_t, 2> pkt_id = {high, board_id};
                         SelfTestElodinMsg msg;

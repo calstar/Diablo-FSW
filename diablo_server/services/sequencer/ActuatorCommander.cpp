@@ -299,7 +299,7 @@ bool ActuatorCommander::sendUDP(const std::string& board_ip,
         cmds.push_back({id, st});
 
     uint8_t buf[512];
-    size_t len = Diablo::create_actuator_command_packet(cmds, buf, sizeof(buf));
+    size_t len = Diablo::create_actuator_command_packet(cmds, 0, buf, sizeof(buf));
     if (len == 0) {
         std::cerr << "[ActuatorCommander] create_actuator_command_packet returned 0" << std::endl;
         return false;

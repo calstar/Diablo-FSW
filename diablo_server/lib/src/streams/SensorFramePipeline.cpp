@@ -87,9 +87,10 @@ std::optional<daq_comms::protocol::SensorBatch> SensorFramePipeline::poll() {
 
     if (peek.packet_type == Diablo::PacketType::SELF_TEST) {
         Diablo::PacketHeader st_header;
+        uint8_t st_adc_good = 0;
         std::vector<Diablo::SelfTestResult> st_results;
         if (!Diablo::parse_self_test_packet(receive_buffer_.data(), static_cast<size_t>(received),
-                                            st_header, st_results)) {
+                                            st_header, st_adc_good, st_results)) {
             std::cerr << "[Pipeline] SELF_TEST parse failed from " << last_source_ip_ << std::endl;
             return std::nullopt;
         }

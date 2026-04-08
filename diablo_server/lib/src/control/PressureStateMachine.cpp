@@ -660,7 +660,7 @@ void PressureStateMachine::sendActuatorCommandUDP(ActuatorID actuator, CommandTy
     commands.push_back(cmd);
 
     uint8_t buf[512];
-    size_t len = Diablo::create_actuator_command_packet(commands, buf, sizeof(buf));
+    size_t len = Diablo::create_actuator_command_packet(commands, 0, buf, sizeof(buf));
     std::vector<uint8_t> packet(buf, buf + len);
     if (packet.empty()) {
         std::cerr << "[PressureStateMachine] ERROR: Failed to construct actuator command packet"

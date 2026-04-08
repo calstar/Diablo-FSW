@@ -286,7 +286,7 @@ std::vector<uint8_t> SensorAssignmentManager::generate_board_config_packet(uint8
 
     size_t written = Diablo::create_sensor_config_packet(
         sensor_ids, reference_voltage, necessary_for_abort, controller_ip, enable_serial_printing,
-        buffer, sizeof(buffer));
+        0, buffer, sizeof(buffer));
 
     if (written == 0 || written > MAX_PACKET_SIZE) {
         std::cerr << "[SensorAssignment] Failed to serialize SENSOR_CONFIG for board "

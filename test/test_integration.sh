@@ -38,6 +38,8 @@ TEST_BACKEND_WS_PORT="${TEST_BACKEND_WS_PORT:-8181}"
 TEST_BACKEND_API_PORT="${TEST_BACKEND_API_PORT:-8182}"
 TEST_ACTUATOR_UDP_PORT="${TEST_ACTUATOR_UDP_PORT:-5015}"
 TEST_STARTUP_LISTEN_PORT="${TEST_STARTUP_LISTEN_PORT:-5014}"
+# sequencer_service TCP port (thin backend forwards SEND_COMMAND here)
+TEST_SEQUENCER_PORT="${TEST_SEQUENCER_PORT:-9998}"
 TEST_CONTROLLER_PORT="${TEST_CONTROLLER_PORT:-9997}"
 TEST_DB_PATH="$REPO_ROOT/.tmp/elodin_integration_test_$$"
 TEST_CONFIG="$REPO_ROOT/.tmp/integration_config_$$.toml"
@@ -77,7 +79,7 @@ kill_stale_integration_processes() {
   # Elodin DB — match on the test DB path pattern
   pkill -f "elodin.*integration_test" 2>/dev/null && killed=$((killed + 1)) || true
   # Also kill any process bound to our test ports
-  for port in $TEST_ELODIN_PORT $TEST_DAQ_UDP_PORT $TEST_BACKEND_WS_PORT $TEST_ACTUATOR_UDP_PORT $TEST_STARTUP_LISTEN_PORT; do
+  for port in $TEST_ELODIN_PORT $TEST_DAQ_UDP_PORT $TEST_BACKEND_WS_PORT $TEST_ACTUATOR_UDP_PORT $TEST_STARTUP_LISTEN_PORT $TEST_SEQUENCER_PORT; do
     lsof -ti ":$port" 2>/dev/null | xargs kill 2>/dev/null || true
   done
   if [ "$killed" -gt 0 ]; then

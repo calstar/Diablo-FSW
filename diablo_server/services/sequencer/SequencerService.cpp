@@ -89,9 +89,9 @@ bool SequencerService::loadConfig(const std::string& path) {
 // existing match or the original path (so callers still get the error).
 static std::string resolveDataPath(const std::string& rel) {
     const char* prefixes[] = {
-        "",           // cwd = repo root (launched from repo root)
-        "../",        // cwd = build/  (e.g. manual run)
-        "../../",     // cwd = build/bin/
+        "",        // cwd = repo root (launched from repo root)
+        "../",     // cwd = build/  (e.g. manual run)
+        "../../",  // cwd = build/bin/
     };
     for (const char* pfx : prefixes) {
         std::string candidate = std::string(pfx) + rel;
@@ -107,13 +107,15 @@ bool SequencerService::init(const std::string& config_path) {
     // State machine CSV
     std::string sm_csv = resolveDataPath("external/DiabloAvionics/test_guis/state_transitions.csv");
     if (!state_machine_.load(sm_csv)) {
-        std::cerr << "[SequencerService] Failed to load state_transitions.csv (tried relative to cwd: "
-                  << sm_csv << ")" << std::endl;
+        std::cerr
+            << "[SequencerService] Failed to load state_transitions.csv (tried relative to cwd: "
+            << sm_csv << ")" << std::endl;
         return false;
     }
 
     // Actuator commander
-    std::string act_csv = resolveDataPath("external/DiabloAvionics/test_guis/state_machine_actuators.csv");
+    std::string act_csv =
+        resolveDataPath("external/DiabloAvionics/test_guis/state_machine_actuators.csv");
     if (!actuator_commander_.load(config_content_, act_csv)) {
         std::cerr << "[SequencerService] Failed to load state_machine_actuators.csv (tried: "
                   << act_csv << ")" << std::endl;
@@ -351,7 +353,8 @@ bool SequencerService::reloadConfig() {
     std::cout << "[SequencerService] Reloading config..." << std::endl;
     loadConfig(config_path_);
 
-    std::string act_csv = resolveDataPath("external/DiabloAvionics/test_guis/state_machine_actuators.csv");
+    std::string act_csv =
+        resolveDataPath("external/DiabloAvionics/test_guis/state_machine_actuators.csv");
     if (!actuator_commander_.load(config_content_, act_csv)) {
         std::cerr << "[SequencerService] Reload: failed to reload actuator CSV" << std::endl;
         return false;

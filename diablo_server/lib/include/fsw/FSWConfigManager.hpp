@@ -7,8 +7,8 @@
 #include <memory>
 #include <string>
 
-#include "transport/NetworkSocket.hpp"
 #include "config/SensorAssignment.hpp"
+#include "transport/NetworkSocket.hpp"
 
 namespace Diablo {
 struct PacketHeader;

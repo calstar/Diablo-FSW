@@ -110,6 +110,13 @@ function loadStoredLcZeroOffsets(): Record<string, number> {
 // when the config loads. Static controller aliases are always present.
 
 const STATIC_ALIASES: Record<string, string[]> = {
+  // Encoder board publishes ENC1.CH* (board-number-scoped); legacy UI used ENC.CH*
+  'ENC.CH1.raw_angle': ['ENC1.CH1.raw_angle'],
+  'ENC.CH2.raw_angle': ['ENC1.CH2.raw_angle'],
+  // LC: cal packets carry raw_adc_counts on LC{n}_Cal.CH*; raw entity may lack a row if raw VTABLE is quiet
+  'LC2.CH1.raw_adc_counts': ['LC2_Cal.CH1.raw_adc_counts'],
+  'LC2.CH2.raw_adc_counts': ['LC2_Cal.CH2.raw_adc_counts'],
+  'LC2.CH6.raw_adc_counts': ['LC2_Cal.CH6.raw_adc_counts'],
   // Controller actuation → Fuel/Ox display
   'CONTROLLER.Fuel.duty_cycle': ['CONTROLLER.actuation.duty_F', 'CONTROLLER.fire.duty_F'],
   'CONTROLLER.Fuel.onoff': ['CONTROLLER.actuation.u_F_on', 'CONTROLLER.fire.fire_active'],
@@ -213,6 +220,13 @@ export function buildAliasesFromConfig(config: any): void {
       for (const comp of components) {
         addAlias(`${baseCal}.CH${ch}.${comp}`, `${calPrefix}.CH${ch}.${comp}`);
         addAlias(`${baseRaw}.CH${ch}.${comp}`, `${rawPrefix}.CH${ch}.${comp}`);
+      }
+      // LC: Sensor Info / plots read LC{n}.CH{m}.raw_adc_counts, but Elodin often only
+      // delivers raw ADC on calibrated rows (LC{n}_Cal.CH{m}.raw_adc_counts — see
+      // elodin-protocol parseCalibratedSensorPayload). When the raw VTABLE is absent
+      // for a channel, the cal stream still carries the code; resolve it here.
+      if (type === 'LC') {
+        addAlias(`${rawPrefix}.CH${ch}.raw_adc_counts`, `${calPrefix}.CH${ch}.raw_adc_counts`);
       }
     }
 

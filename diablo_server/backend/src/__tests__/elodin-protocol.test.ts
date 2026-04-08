@@ -47,6 +47,34 @@ describe('elodin-protocol calibrated PT raw field (signed ADC)', () => {
   });
 });
 
+describe('elodin-protocol TC calibrated temperature_c', () => {
+  it('accepts TC1 cal channel 2 with temp 150°C (board-scoped entity)', () => {
+    const buf = Buffer.alloc(21);
+    buf.writeBigUInt64LE(1_000_000_000n, 0);
+    buf.writeUInt8(2, 8);
+    buf.writeFloatLE(150.0, 12);
+    buf.writeInt32LE(9_800_000, 16);
+    buf.writeUInt8(1, 20);
+    // low 0x12 = board 1, cal ch2
+    const out = parseElodinPacket([0x21, 0x12], buf);
+    const t = out.find((p) => p.entity === 'TC1_Cal.CH2' && p.component === 'temperature_c');
+    expect(t).toBeDefined();
+    expect(t!.value).toBeCloseTo(150.0, 5);
+  });
+
+  it('rejects absurd temperature_c (>10000) as garbage', () => {
+    const buf = Buffer.alloc(21);
+    buf.writeBigUInt64LE(1n, 0);
+    buf.writeUInt8(2, 8);
+    buf.writeFloatLE(9_800_000.0, 12);
+    buf.writeInt32LE(0, 16);
+    buf.writeUInt8(0, 20);
+    const out = parseElodinPacket([0x21, 0x12], buf);
+    const t = out.find((p) => p.component === 'temperature_c');
+    expect(t).toBeUndefined();
+  });
+});
+
 describe('elodin-protocol parseElodinPacket', () => {
     it('should parse 0x60 SELF_TEST results correctly', () => {
         // Layout: U64(0) timestamp_ns | U8(8) sensor_id | U8(9) result

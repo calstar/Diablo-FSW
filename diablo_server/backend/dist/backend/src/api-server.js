@@ -8,6 +8,17 @@ import * as path from 'path';
 import { readConfig, writeConfig } from './routes/config.js';
 import { discoverProjects, getEnabledBoardsForFlash, getOtaWorkspaceRoot, BOARD_TYPE_TO_PROJECT } from './ota-build.js';
 import { otaBuildFlash, otaFlashFirmwareFile } from './ota-service-cmd.js';
+function asBoardId(raw, fallback) {
+    if (typeof raw === 'number' && Number.isFinite(raw))
+        return raw;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : fallback;
+}
+/** Match FSW/Elodin: (board_id % 10) with 0 → 10 for PTn / TCn / RTDn / LCn. */
+function elodinSlotFromBoardId(boardId) {
+    const m = boardId % 10;
+    return m === 0 ? 10 : m;
+}
 function buildSensorConfig() {
     const config = readConfig();
     const boards = (config.boards || {});
@@ -19,7 +30,7 @@ function buildSensorConfig() {
         if (board.enabled === false)
             continue;
         const boardIp = board.ip || '';
-        const boardId = typeof board.board_id === 'number' ? board.board_id : 1;
+        const boardId = asBoardId(board.board_id, 1);
         const isHpBoard = Array.isArray(board.hp_pt_connectors) && board.hp_pt_connectors.length > 0;
         const excitationConnectorId = board.excitation_connector_id ?? -1;
         const hpPtConnectors = new Set(isHpBoard ? board.hp_pt_connectors : []);
@@ -49,7 +60,7 @@ function buildSensorConfig() {
             if (isHpBoard && !hpPtConnectors.has(channelId))
                 continue;
             const isHpPt = isHpBoard && hpPtConnectors.has(channelId);
-            const boardNumber = boardId % 10;
+            const boardNumber = elodinSlotFromBoardId(boardId);
             sensors.push({
                 id: channelId,
                 role: roleName,
@@ -73,9 +84,9 @@ function buildSensorConfig() {
         const rolesSection = config[boardRolesKey];
         if (!rolesSection || typeof rolesSection !== 'object')
             continue;
-        const boardId = typeof board.board_id === 'number' ? board.board_id : 51;
+        const boardId = asBoardId(board.board_id, 51);
         const boardIp = board.ip || '';
-        const boardNumber = boardId % 10;
+        const boardNumber = elodinSlotFromBoardId(boardId);
         for (const [roleName, channelId] of Object.entries(rolesSection)) {
             const ch = typeof channelId === 'number' ? channelId : Number(channelId);
             if (!isFinite(ch))
@@ -99,14 +110,14 @@ function buildSensorConfig() {
             continue;
         if (board.enabled === false)
             continue;
-        const boardId = typeof board.board_id === 'number' ? board.board_id : 31;
+        const boardId = asBoardId(board.board_id, 31);
         const boardIp = board.ip || '';
         const boardRolesKey = `sensor_roles_${boardKey}`;
         const rolesSection = config[boardRolesKey];
         const active = Array.isArray(board.active_connectors) && board.active_connectors.length > 0
             ? board.active_connectors
             : Array.from({ length: (board.num_sensors ?? 4) }, (_, i) => i + 1);
-        const boardNumber = boardId % 10;
+        const boardNumber = elodinSlotFromBoardId(boardId);
         if (rolesSection && typeof rolesSection === 'object') {
             for (const [roleName, channelId] of Object.entries(rolesSection)) {
                 const ch = typeof channelId === 'number' ? channelId : Number(channelId);
@@ -146,11 +157,11 @@ function buildSensorConfig() {
             continue;
         if (board.enabled === false)
             continue;
-        const boardId = typeof board.board_id === 'number' ? board.board_id : 41;
+        const boardId = asBoardId(board.board_id, 41);
         const boardIp = board.ip || '';
         const boardRolesKey = `sensor_roles_${boardKey}`;
         const rolesSection = config[boardRolesKey];
-        const boardNumber = boardId % 10;
+        const boardNumber = elodinSlotFromBoardId(boardId);
         if (rolesSection && typeof rolesSection === 'object') {
             for (const [roleName, channelId] of Object.entries(rolesSection)) {
                 const ch = typeof channelId === 'number' ? channelId : Number(channelId);

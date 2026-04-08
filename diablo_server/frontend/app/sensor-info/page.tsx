@@ -1,11 +1,26 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react';
-import { useSensorStore, useSensorValue, ALIASES } from '@/lib/store';
+import { useSensorStore, useSensorValue } from '@/lib/store';
 import { getWebSocketClient, getApiBaseUrl } from '@/lib/websocket';
 import { MessageType, SensorUpdate, StateUpdate } from '@/lib/types';
-import { useSensorRate, getSensorRate } from '@/lib/sensor-rate';
+import { getAliasedSensorRate, useAliasedSensorRate } from '@/lib/aliased-sensor-rate';
 import { getEntityColor } from '@/lib/sensor-colors';
+import {
+  buildActChannelsFromBoards,
+  buildEncoderDataFromBoards,
+  buildLcDataFromBoards,
+  buildRtdDataFromBoards,
+  buildTcDataFromBoards,
+  SENSOR_INFO_DEFAULT_ACT_DATA,
+  SENSOR_INFO_DEFAULT_ENCODER_DATA,
+  SENSOR_INFO_DEFAULT_LC_DATA,
+  SENSOR_INFO_DEFAULT_RTD_DATA,
+  SENSOR_INFO_DEFAULT_TC_DATA,
+  type RtdLcRowConfig,
+  type TcRowConfig,
+  type EncoderRowConfig,
+} from '@/lib/sensor-info-entities';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -44,33 +59,6 @@ function fmtHz(v: number): string {
   return v.toFixed(1);
 }
 
-function getAliasedSensorRate(entity: string, component: string): number {
-  const key = `${entity}.${component}`;
-  let best = getSensorRate(entity, component);
-  const fallbacks = ALIASES[key];
-  if (fallbacks) {
-    for (const fb of fallbacks) {
-      const i = fb.lastIndexOf('.');
-      if (i <= 0) continue;
-      const fbEntity = fb.slice(0, i);
-      const fbComponent = fb.slice(i + 1);
-      best = Math.max(best, getSensorRate(fbEntity, fbComponent));
-    }
-  }
-  return best;
-}
-
-function useAliasedSensorRate(entity: string, component: string, intervalMs = 500): number {
-  const [rate, setRate] = useState(0);
-  useEffect(() => {
-    const compute = () => setRate(getAliasedSensorRate(entity, component));
-    compute();
-    const id = setInterval(compute, intervalMs);
-    return () => clearInterval(id);
-  }, [entity, component, intervalMs]);
-  return rate;
-}
-
 function fmtMa(v: number | null): string {
   if (v === null || !isFinite(v)) return '---';
   return v.toFixed(2);
@@ -91,31 +79,15 @@ function fmtResistance(v: number | null): string {
   return v.toFixed(3);
 }
 
-// ── Board-level rate helper ────────────────────────────────────────────────────
+/** AS5600 12-bit angle → degrees (same as encoders pane). */
+const ENC_RAW_TO_DEG = 360.0 / 4096.0;
+function encRawToDeg(raw: number): number {
+  return (raw & 0x0fff) * ENC_RAW_TO_DEG;
+}
 
-function useBoardRate(
-  keys: Array<{ entity: string; component: string }>,
-  intervalMs = 1000
-): number {
-  const [rate, setRate] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const compute = () => {
-      const total = keys.reduce((sum, k) => sum + getAliasedSensorRate(k.entity, k.component), 0);
-      if (!cancelled) setRate(total);
-    };
-
-    compute();
-    const id = setInterval(compute, intervalMs);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [JSON.stringify(keys), intervalMs]);
-
-  return rate;
+function fmtDeg(v: number | null): string {
+  if (v === null || !isFinite(v)) return '---';
+  return encRawToDeg(v).toFixed(1);
 }
 
 // ── Shared table wrapper ──────────────────────────────────────────────────────
@@ -224,9 +196,8 @@ function HptRow({ sensor }: { sensor: PtSensor }) {
 
 // ── TC row ───────────────────────────────────────────────────────────────────
 
-function TcRow({ entity, label, color }: { entity: string; label: string; color: string; voltageReference: number }) {
+function TcRow({ entity, calEntity, label, color }: { entity: string; calEntity: string; label: string; color: string; voltageReference: number }) {
   const raw  = useSensorValue(entity, 'raw_adc_counts');
-  const calEntity = entity.replace('TC.', 'TC_Cal.');
   const tempC = useSensorValue(calEntity, 'temperature_c');
   const rateRaw = useAliasedSensorRate(entity, 'raw_adc_counts');
   const rateCal = useAliasedSensorRate(calEntity, 'temperature_c');
@@ -279,9 +250,8 @@ function RtdRow({ entity, calEntity, label, color }: { entity: string; calEntity
 
 // ── LC row ───────────────────────────────────────────────────────────────────
 
-function LcRow({ entity, label, color }: { entity: string; label: string; color: string }) {
+function LcRow({ entity, calEntity, label, color }: { entity: string; calEntity: string; label: string; color: string }) {
   const raw  = useSensorValue(entity, 'raw_adc_counts');
-  const calEntity = entity.replace('LC.', 'LC_Cal.');
   const forceKg = useSensorValue(calEntity, 'force_kg');
   const rateRaw = useAliasedSensorRate(entity, 'raw_adc_counts');
   const rateCal = useAliasedSensorRate(calEntity, 'force_kg');
@@ -330,72 +300,35 @@ function ActRow({ entity, calEntity, label, color }: { entity: string; calEntity
   );
 }
 
-// ── Channel builder from /api/config ─────────────────────────────────────────
+// ── Encoder row (raw_angle counts → °) ───────────────────────────────────────
 
-function buildChannels(boards: Record<string, any>, type: 'TC' | 'RTD' | 'LC' | 'ACTUATOR'): number[] {
-  const channels: number[] = [];
-  for (const board of Object.values(boards)) {
-    if (board.type !== type || board.enabled === false) continue;
-    const active: number[] =
-      Array.isArray(board.active_connectors) && board.active_connectors.length > 0
-        ? (board.active_connectors as number[])
-        : Array.from({ length: (board.num_sensors as number) ?? 10 }, (_, i) => i + 1);
-    channels.push(...active);
-  }
-  return channels;
-}
+function EncRow({ row, color }: { row: EncoderRowConfig; color: string }) {
+  const raw = useSensorValue(row.entity, 'raw_angle');
+  const rate = useAliasedSensorRate(row.entity, 'raw_angle');
 
-/** TC channels with each board's voltage_reference (0=internal, 1=VDD, 2=5V). */
-function buildTcChannelsWithRef(boards: Record<string, any>): { entity: string; label: string; voltageReference: number }[] {
-  const out: { entity: string; label: string; voltageReference: number }[] = [];
-  for (const board of Object.values(boards)) {
-    if (board.type !== 'TC' || board.enabled === false) continue;
-    const ref = Math.min(2, Math.max(0, (board.voltage_reference as number) ?? 0));
-    const active: number[] =
-      Array.isArray(board.active_connectors) && board.active_connectors.length > 0
-        ? (board.active_connectors as number[])
-        : Array.from({ length: (board.num_sensors as number) ?? 10 }, (_, i) => i + 1);
-    for (const ch of active) {
-      out.push({ entity: `TC.CH${ch}`, label: `TC Ch${ch}`, voltageReference: ref });
-    }
-  }
-  return out;
-}
-
-function buildActChannels(boards: Record<string, any>): { entity: string; calEntity: string; label: string }[] {
-  const out: { entity: string; calEntity: string; label: string }[] = [];
-  for (const board of Object.values(boards)) {
-    if (board.type !== 'ACTUATOR' || board.enabled === false) continue;
-    const boardId = typeof board.board_id === 'number' ? board.board_id : 11;
-    const boardNumber = boardId % 10;
-    const active: number[] =
-      Array.isArray(board.active_connectors) && board.active_connectors.length > 0
-        ? (board.active_connectors as number[])
-        : Array.from({ length: (board.num_sensors as number) ?? 10 }, (_, i) => i + 1);
-    for (const ch of active) {
-      out.push({
-        entity: `ACT${boardNumber}.CH${ch}`,
-        calEntity: `ACT${boardNumber}_Cal.CH${ch}`,
-        label: `B${boardId} Ch${ch}`,
-      });
-    }
-  }
-  return out;
+  return (
+    <tr className="border-b border-gray-800/40 hover:bg-gray-900/30 transition-colors">
+      <td className="px-4 py-2">
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+          <span
+            className="text-gray-200 font-sans font-medium text-xs"
+            title={`Board ${row.boardId}`}
+          >
+            B{row.boardId} {row.label}
+          </span>
+        </div>
+      </td>
+      <td className="px-4 py-2 tabular-nums text-purple-300">{fmtAdc(raw)}</td>
+      <td className="px-4 py-2 tabular-nums text-violet-300">
+        {fmtDeg(raw)} <span className="text-gray-600 text-xs">°</span>
+      </td>
+      <td className="px-4 py-2 tabular-nums text-cyan-400">{fmtHz(rate)} <span className="text-gray-600 text-xs">Hz</span></td>
+    </tr>
+  );
 }
 
 const SENSE_COLORS = ['#F59E0B', '#10B981', '#3B82F6', '#EC4899', '#F87171', '#A78BFA', '#34D399', '#FBBF24', '#60A5FA', '#E879F9'];
-
-// Default channel lists match config.toml active_connectors so the first
-// render produces the same component tree as after the config fetch.
-// This prevents a 0 → N row transition that can trigger "more hooks" errors.
-const TC_DEFAULT_CHANNELS  = [2, 3, 4, 5];   // tc_board  active_connectors
-const RTD_DEFAULT_CHANNELS = [1, 2, 3, 4];   // rtd_board active_connectors
-const LC_DEFAULT_CHANNELS  = [1, 2, 3];      // lc_board  active_connectors
-const ACT_DEFAULT_DATA = Array.from({ length: 10 }, (_, i) => ({
-  entity: `ACT2.CH${i + 1}`,
-  calEntity: `ACT2_Cal.CH${i + 1}`,
-  label: `B12 Ch${i + 1}`,
-}));
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
@@ -405,6 +338,10 @@ export default function SensorInfoPage() {
   // ── DAQ / relay data-rate probe (Elodin relay → backend) ────────────────────
   const [relayPackets, setRelayPackets] = useState<number | null>(null);
   const [relayRateHz, setRelayRateHz] = useState<number>(0);
+  /** Backend avg per-channel Hz per board group from Elodin ingest (pre-WS-throttle ≈ scan rate). */
+  const [boardScanHz, setBoardScanHz] = useState({
+    pt1: 0, pt2: 0, tc: 0, rtd: 0, lc: 0, act: 0, enc: 0,
+  });
 
   useEffect(() => {
     let prevCount: number | null = null;
@@ -428,6 +365,18 @@ export default function SensorInfoPage() {
           }
           prevCount = count;
           prevTime = now;
+          const b = data.boardScanRateHz;
+          if (b && typeof b === 'object') {
+            setBoardScanHz({
+              pt1: typeof b.pt1 === 'number' ? b.pt1 : 0,
+              pt2: typeof b.pt2 === 'number' ? b.pt2 : 0,
+              tc: typeof b.tc === 'number' ? b.tc : 0,
+              rtd: typeof b.rtd === 'number' ? b.rtd : 0,
+              lc: typeof b.lc === 'number' ? b.lc : 0,
+              act: typeof b.act === 'number' ? b.act : 0,
+              enc: typeof b.enc === 'number' ? b.enc : 0,
+            });
+          }
         })
         .catch(() => {
           // leave last values on error
@@ -447,12 +396,11 @@ export default function SensorInfoPage() {
 
   // Dynamic channel lists from /api/config, seeded with defaults so the
   // initial render matches the post-config-fetch structure.
-  const [tcData, setTcData] = useState<{ entity: string; label: string; voltageReference: number }[]>(
-    TC_DEFAULT_CHANNELS.map((ch) => ({ entity: `TC.CH${ch}`, label: `TC Ch${ch}`, voltageReference: 0 }))
-  );
-  const [rtdChannels, setRtdChannels] = useState<number[]>(RTD_DEFAULT_CHANNELS);
-  const [lcChannels, setLcChannels] = useState<number[]>(LC_DEFAULT_CHANNELS);
-  const [actData, setActData] = useState<{ entity: string; calEntity: string; label: string }[]>(ACT_DEFAULT_DATA);
+  const [tcData, setTcData] = useState<TcRowConfig[]>(SENSOR_INFO_DEFAULT_TC_DATA);
+  const [rtdData, setRtdData] = useState<RtdLcRowConfig[]>(SENSOR_INFO_DEFAULT_RTD_DATA);
+  const [lcData, setLcData] = useState<RtdLcRowConfig[]>(SENSOR_INFO_DEFAULT_LC_DATA);
+  const [actData, setActData] = useState<{ entity: string; calEntity: string; label: string }[]>(SENSOR_INFO_DEFAULT_ACT_DATA);
+  const [encData, setEncData] = useState<EncoderRowConfig[]>(SENSOR_INFO_DEFAULT_ENCODER_DATA);
 
   const loadChannelConfig = useCallback(() => {
     fetch(`${getApiBaseUrl()}/api/config`)
@@ -460,19 +408,22 @@ export default function SensorInfoPage() {
       .then((data: any) => {
         const config = data?.config;
         const boards = config?.boards;
+        const encRoles = config?.sensor_roles_encoder_board as Record<string, number> | undefined;
         const adc = config?.adc;
         if (adc && typeof adc.internal_v === 'number' && typeof adc.absolute_5v_v === 'number') {
           useSensorStore.getState().setVoltageRefNominals({ internalV: adc.internal_v, absolute5vV: adc.absolute_5v_v });
         }
         if (!boards) return;
-        const tc = buildTcChannelsWithRef(boards);
+        const tc = buildTcDataFromBoards(boards as Record<string, unknown>);
         if (tc.length) setTcData(tc);
-        const rtd = buildChannels(boards, 'RTD');
-        if (rtd.length) setRtdChannels(rtd);
-        const lc = buildChannels(boards, 'LC');
-        if (lc.length) setLcChannels(lc);
-        const act = buildActChannels(boards);
+        const rtd = buildRtdDataFromBoards(boards as Record<string, unknown>);
+        if (rtd.length) setRtdData(rtd);
+        const lc = buildLcDataFromBoards(boards as Record<string, unknown>);
+        if (lc.length) setLcData(lc);
+        const act = buildActChannelsFromBoards(boards as Record<string, unknown>);
         if (act.length) setActData(act);
+        const enc = buildEncoderDataFromBoards(boards as Record<string, unknown>, encRoles ?? null);
+        if (enc.length) setEncData(enc);
       })
       .catch(() => {/* keep defaults on failure */});
   }, []);
@@ -527,25 +478,6 @@ export default function SensorInfoPage() {
     loadPtSensors();
   }, [loadPtSensors]);
 
-  // ── Board-level DAQ breakdown (approximate, from per-entity stream rates) ────
-  const pt21Keys = ptSensors
-    .filter((s) => (s.boardId ?? 21) === 21)
-    .map((s) => ({ entity: s.calEntity, component: 'pressure_psi' }));
-  const pt22Keys = hptSensors
-    .filter((s) => (s.boardId ?? 22) === 22)
-    .map((s) => ({ entity: s.calEntity, component: 'pressure_psi' }));
-  const tcKeys = tcData.map((d) => ({ entity: d.entity, component: 'raw_adc_counts' }));
-  const rtdKeys = rtdChannels.map((ch) => ({ entity: `RTD.CH${ch}`, component: 'raw_resistance_counts' }));
-  const lcKeys = lcChannels.map((ch) => ({ entity: `LC.CH${ch}`, component: 'raw_adc_counts' }));
-  const actKeys = actData.map((d) => ({ entity: d.entity, component: 'raw_adc_counts' }));
-
-  const pt21Rate = useBoardRate(pt21Keys);
-  const pt22Rate = useBoardRate(pt22Keys);
-  const tcRate = useBoardRate(tcKeys);
-  const rtdRate = useBoardRate(rtdKeys);
-  const lcRate = useBoardRate(lcKeys);
-  const actRate = useBoardRate(actKeys);
-
   useEffect(() => {
     const unsub = ws.on(MessageType.CONFIG_UPDATED, () => { loadChannelConfig(); loadPtSensors(); });
     return () => { unsub(); };
@@ -557,7 +489,7 @@ export default function SensorInfoPage() {
 
         <div className="flex items-center gap-3 mb-1">
           <h1 className="text-2xl font-bold tracking-widest text-gray-300 uppercase">Sensor Info</h1>
-          <span className="text-xs text-gray-500 font-mono">ADC · Converted · Frontend Rate = updates/sec per channel received by this GUI client</span>
+          <span className="text-xs text-gray-500 font-mono">ADC · Converted · per-row rate = this browser; header = ingest Hz per channel (pre-throttle, from Elodin)</span>
         </div>
 
         <div className="flex flex-wrap gap-3 mb-2">
@@ -580,32 +512,39 @@ export default function SensorInfoPage() {
 
           <div className="bg-card border border-gray-800 rounded-lg px-4 py-3 text-[11px] font-mono text-gray-300 flex flex-col gap-1">
             <div className="text-[10px] uppercase text-gray-500 tracking-widest mb-1">
-              Frontend Received Rates (all channels summed)
+              Board ingest scan rate (avg Hz / channel)
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-x-4 gap-y-1">
+            <div className="text-[10px] text-gray-600 mb-1">
+              Mean per-channel rate from relay before WebSocket throttle (true DAQ/board delivery rate).
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7 gap-x-4 gap-y-1">
               <div>
-                <div className="text-[10px] text-gray-500">PT B21</div>
-                <div className="text-cyan-400">{fmtHz(pt21Rate)} Hz</div>
+                <div className="text-[10px] text-gray-500">PT B21 (PT1.*)</div>
+                <div className="text-cyan-400">{fmtHz(boardScanHz.pt1)} Hz</div>
               </div>
               <div>
-                <div className="text-[10px] text-gray-500">HPT B22</div>
-                <div className="text-cyan-400">{fmtHz(pt22Rate)} Hz</div>
+                <div className="text-[10px] text-gray-500">HPT B22 (PT2.*)</div>
+                <div className="text-cyan-400">{fmtHz(boardScanHz.pt2)} Hz</div>
               </div>
               <div>
-                <div className="text-[10px] text-gray-500">TC B51</div>
-                <div className="text-cyan-400">{fmtHz(tcRate)} Hz</div>
+                <div className="text-[10px] text-gray-500">TC B51 (TC*)</div>
+                <div className="text-cyan-400">{fmtHz(boardScanHz.tc)} Hz</div>
               </div>
               <div>
-                <div className="text-[10px] text-gray-500">RTD B31</div>
-                <div className="text-cyan-400">{fmtHz(rtdRate)} Hz</div>
+                <div className="text-[10px] text-gray-500">RTD B31 (RTD*)</div>
+                <div className="text-cyan-400">{fmtHz(boardScanHz.rtd)} Hz</div>
               </div>
               <div>
-                <div className="text-[10px] text-gray-500">LC B41</div>
-                <div className="text-cyan-400">{fmtHz(lcRate)} Hz</div>
+                <div className="text-[10px] text-gray-500">LC B41 (LC*)</div>
+                <div className="text-cyan-400">{fmtHz(boardScanHz.lc)} Hz</div>
               </div>
               <div>
-                <div className="text-[10px] text-gray-500">ACT B12/14</div>
-                <div className="text-cyan-400">{fmtHz(actRate)} Hz</div>
+                <div className="text-[10px] text-gray-500">ENC B61 (ENC*)</div>
+                <div className="text-cyan-400">{fmtHz(boardScanHz.enc)} Hz</div>
+              </div>
+              <div>
+                <div className="text-[10px] text-gray-500">ACT B12/14 (ACT*)</div>
+                <div className="text-cyan-400">{fmtHz(boardScanHz.act)} Hz</div>
               </div>
             </div>
           </div>
@@ -647,6 +586,7 @@ export default function SensorInfoPage() {
             <TcRow
               key={d.entity}
               entity={d.entity}
+              calEntity={d.calEntity}
               label={d.label}
               color={SENSE_COLORS[i % SENSE_COLORS.length]}
               voltageReference={d.voltageReference}
@@ -660,12 +600,12 @@ export default function SensorInfoPage() {
           color="#10B981"
           headers={['Channel', 'ADC Code', 'Temp', 'Frontend Rate']}
         >
-          {rtdChannels.map((ch, i) => (
+          {rtdData.map((d, i) => (
             <RtdRow
-              key={ch}
-              entity={`RTD.CH${ch}`}
-              calEntity={`RTD_Cal.CH${ch}`}
-              label={`RTD Ch${ch}`}
+              key={d.entity}
+              entity={d.entity}
+              calEntity={d.calEntity}
+              label={d.label}
               color={SENSE_COLORS[i % SENSE_COLORS.length]}
             />
           ))}
@@ -677,13 +617,25 @@ export default function SensorInfoPage() {
           color="#3B82F6"
           headers={['Channel', 'ADC Code', 'Force (derived)', 'Frontend Rate']}
         >
-          {lcChannels.map((ch, i) => (
+          {lcData.map((d, i) => (
             <LcRow
-              key={ch}
-              entity={`LC.CH${ch}`}
-              label={`LC Ch${ch}`}
+              key={d.entity}
+              entity={d.entity}
+              calEntity={d.calEntity}
+              label={d.label}
               color={SENSE_COLORS[i % SENSE_COLORS.length]}
             />
+          ))}
+        </SensorTable>
+
+        {/* ── ENC (Encoders – board 61) ────────────────────────────────────── */}
+        <SensorTable
+          title="ENC — Magnetic Encoders (Board 61)"
+          color="#7C3AED"
+          headers={['Channel', 'Raw counts', 'Angle (12-bit → °)', 'Frontend Rate']}
+        >
+          {encData.map((row, i) => (
+            <EncRow key={row.entity} row={row} color={SENSE_COLORS[i % SENSE_COLORS.length]} />
           ))}
         </SensorTable>
 

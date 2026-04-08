@@ -21,6 +21,7 @@ export class ElodinClient extends EventEmitter {
     hasReceivedData = false;
     writeQueue = [];
     drainPending = false;
+    processingPackets = false;
     get connected() {
         return this._connected;
     }
@@ -99,16 +100,43 @@ export class ElodinClient extends EventEmitter {
             }
         });
     }
-    static MAX_BUFFER_BYTES = 2 * 1024 * 1024; // 2MB cap to prevent OOM from corrupted stream
+    // Never drop the whole buffer on overload — trim oldest tail only at hard cap.
+    // Parsing runs cooperatively (setImmediate) so we avoid socket pause/resume.
+    static MAX_BUFFER_BYTES = 128 * 1024 * 1024;
+    static TRIM_KEEP_TAIL_BYTES = 4 * 1024 * 1024;
+    isLikelyDataPacket(packetId) {
+        const [high] = packetId;
+        // Data-bearing packet families used by the stack.
+        // Excludes most registration/control MSG traffic that can flood the event loop.
+        return (high === 0x10 || // heartbeats
+            high === 0x20 || high === 0x21 || high === 0x22 || high === 0x23 || high === 0x24 || // PT/TC/RTD/LC/ENC
+            high === 0x30 || high === 0x31 || high === 0x32 || // ACT raw/cal/commanded
+            high === 0x40 || high === 0x41 || high === 0x42 || high === 0x43 || high === 0x44 || // controller
+            high === 0x46 || // calibration commands
+            high === 0x50 || // sequencer/PSM
+            high === 0x60 // self-test
+        );
+    }
     handleData(data) {
-        this.buffer = Buffer.concat([this.buffer, data]);
-        // Cap buffer to prevent unbounded growth from malformed/chunked stream
+        // Avoid an extra copy when buffer is empty.
+        this.buffer = this.buffer.length === 0 ? data : Buffer.concat([this.buffer, data]);
+        // Hard safety cap: keep the most recent tail (best chance of re-sync).
         if (this.buffer.length > ElodinClient.MAX_BUFFER_BYTES) {
-            console.error(`[ElodinClient] ⚠️ Buffer exceeded ${ElodinClient.MAX_BUFFER_BYTES} bytes — resetting (possible stream corruption)`);
-            this.buffer = Buffer.alloc(0);
+            console.error(`[ElodinClient] ❌ Buffer exceeded hard cap ${ElodinClient.MAX_BUFFER_BYTES} bytes — trimming oldest`);
+            this.buffer = this.buffer.subarray(this.buffer.length - ElodinClient.TRIM_KEEP_TAIL_BYTES);
         }
+        // Parse in cooperative chunks so heavy Elodin bursts can't starve Node's event loop
+        // (HTTP/WS handshakes were timing out under sustained hardware traffic).
+        if (!this.processingPackets) {
+            this.processingPackets = true;
+            this.processBufferedPackets();
+        }
+    }
+    processBufferedPackets() {
+        const MAX_PACKETS_PER_TICK = 1000;
+        let processed = 0;
         // Protocol: len(4) = payload + 4 (ty+packetId+requestId). Total packet = 4 + len.
-        while (this.buffer.length >= 4) {
+        while (this.buffer.length >= 4 && processed < MAX_PACKETS_PER_TICK) {
             const packetLen = this.buffer.readUInt32LE(0);
             if (this.buffer.length < packetLen + 4)
                 break;
@@ -136,10 +164,20 @@ export class ElodinClient extends EventEmitter {
                 continue;
             }
             const payload = packet.subarray(8);
-            if (header.ty === ElodinPacketType.TABLE) {
+            // Elodin can deliver stream rows as ty=TABLE(1) or ty=MSG(0) depending on path/version.
+            // Accept TABLE always; accept MSG only for known data packet families to avoid
+            // flooding the event loop with registration/control chatter.
+            if (header.ty === ElodinPacketType.TABLE ||
+                (header.ty === ElodinPacketType.MSG && this.isLikelyDataPacket(header.packetId))) {
                 this.emit('packet', header, payload);
             }
+            processed++;
         }
+        if (this.buffer.length >= 4) {
+            setImmediate(() => this.processBufferedPackets());
+            return;
+        }
+        this.processingPackets = false;
     }
     /** Find offset of next valid packet to recover from chunking/misalignment. */
     findSyncOffset() {

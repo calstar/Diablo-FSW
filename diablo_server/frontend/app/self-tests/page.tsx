@@ -1,6 +1,7 @@
 'use client'
 
 import { useSensorStore } from '@/lib/store';
+import { selfTestBoardIdsFromSensorData } from '@/lib/self-test-keys';
 import { getWebSocketClient } from '@/lib/websocket';
 import { useEffect } from 'react';
 import { MessageType, SensorUpdate, BoardStatus, BoardStatusPayload } from '@/lib/types';
@@ -21,9 +22,7 @@ export default function SelfTestsPage() {
         return () => { unsubSensor(); unsubBoards(); };
     }, [ws, updateSensor, updateBoards]);
 
-    const testedBoards = Object.values(boardsMap ?? {}).filter(b =>
-        Object.keys(sensorData).some(k => k.startsWith(`SELF_TEST.BOARD_${b.id}.`))
-    );
+    const testedIds = selfTestBoardIdsFromSensorData(sensorData);
 
     return (
         <main className="h-full bg-background text-text flex flex-col overflow-auto p-8 md:p-10">
@@ -34,7 +33,7 @@ export default function SelfTestsPage() {
                 </p>
             </div>
 
-            {testedBoards.length === 0 ? (
+            {testedIds.length === 0 ? (
                 <div className="rounded-xl border border-gray-700 bg-card p-12 text-center text-text-muted text-lg flex flex-col items-center justify-center gap-3">
                     <div className="w-12 h-12 rounded-full bg-gray-800 animate-pulse flex items-center justify-center">
                         <span className="text-xl">⌛</span>
@@ -46,13 +45,17 @@ export default function SelfTestsPage() {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {testedBoards.map(b => {
-                        const testKeys = Object.keys(sensorData).filter((k) => k.startsWith(`SELF_TEST.BOARD_${b.id}.`));
+                    {testedIds.map((boardId) => {
+                        const b = boardsMap?.[boardId];
+                        const testKeys = Object.keys(sensorData).filter((k) => k.startsWith(`SELF_TEST.BOARD_${boardId}.`));
                         const allPassed = testKeys.every(k => sensorData[k] === 1);
+                        const title = b
+                            ? `${b.type || 'BOARD'}${b.boardNumber != null ? ` #${b.boardNumber}` : ''}`
+                            : `Board ${boardId}`;
 
                         return (
                             <div
-                                key={b.id}
+                                key={boardId}
                                 className={`rounded-xl border p-5 flex flex-col transition-all backdrop-blur-sm ${allPassed
                                         ? 'border-green-900/50 bg-green-950/10 hover:bg-green-950/20'
                                         : 'border-red-900/50 bg-red-950/10 hover:bg-red-950/20'
@@ -60,10 +63,10 @@ export default function SelfTestsPage() {
                             >
                                 <div className="flex items-center justify-between mb-4 border-b border-white/5 pb-2">
                                     <h3 className="text-xl font-bold">
-                                        {b.type || 'BOARD'} {b.boardNumber ? `#${b.boardNumber}` : ''}
+                                        {title}
                                     </h3>
                                     <div className="flex items-center gap-2">
-                                        <span className="text-xs text-gray-500 font-mono">ID {b.id}</span>
+                                        <span className="text-xs text-gray-500 font-mono">ID {boardId}</span>
                                         <span className={`text-xs px-2 py-0.5 rounded font-black font-mono uppercase ${allPassed ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'
                                             }`}>
                                             {allPassed ? 'ALL PASSED' : 'FAILURES'}

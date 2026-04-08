@@ -227,6 +227,15 @@ static double convert_tc_adc_to_temp_c(int32_t adc_raw, double adc_ref_voltage) 
 }
 
 /**
+ * TC/RTD calibrated temperature before Elodin publish. Polynomial fits can diverge when raw ADC
+ * is far off-scale (e.g. multi-million counts); thin backend rejects absurd temperature_c.
+ */
+static double clamp_tc_rtd_temp_publish_c(double t_c) {
+    if (!std::isfinite(t_c)) return 0.0;
+    return std::clamp(t_c, -300.0, 2200.0);
+}
+
+/**
  * Pt1000 RTD: raw ADC → voltage → resistance → temperature (°C).
  * Uses Callendar-Van Dusen (IEC 60751) inverse via existing rtd::resistance_to_temp_cvd().
  */
@@ -1125,6 +1134,7 @@ int main(int argc, char* argv[]) {
                 temp_c = convert_tc_adc_to_temp_c(adc_i32, tc_adc_ref_voltage);
                 cal_status = 0;
             }
+            temp_c = clamp_tc_rtd_temp_publish_c(temp_c);
             comms::messages::sensor::CalibratedTCMessage cal_msg(
                 ts_ns, ch_eff, std::array<uint8_t, 3>{0, 0, 0}, static_cast<float>(temp_c),
                 static_cast<uint32_t>(adc_i32), cal_status);
@@ -1141,6 +1151,7 @@ int main(int argc, char* argv[]) {
                                                    rtd_r0_ohm);
                 cal_status = 0;
             }
+            temp_c = clamp_tc_rtd_temp_publish_c(temp_c);
             comms::messages::sensor::CalibratedRTDMessage cal_msg(
                 ts_ns, ch_eff, std::array<uint8_t, 3>{0, 0, 0}, static_cast<float>(temp_c),
                 static_cast<uint32_t>(adc_i32), cal_status);

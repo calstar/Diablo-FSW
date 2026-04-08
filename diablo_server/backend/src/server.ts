@@ -34,6 +34,7 @@ import { readConfig } from './routes/config.js';
 import { getStateActuatorMap, CSV_ACTUATOR_TO_ENTITY, resolveActuatorCmdEntity, resolveActuatorTelemetryEntity } from './legacy/state-actuators.js';
 import type { StateActuatorMap } from './legacy/state-actuators.js';
 import { getStateTransitions } from './legacy/state-transitions.js';
+import { recordBoardScanIngest, getBoardScanRateHz } from './board-scan-rate.js';
 import { handleCalibrationCommand, type CalibrationHost } from './calibration-handler.js';
 import { loadPTCalibration, type CalibrationCoefficients } from './calibration.js';
 import { MessageType, SystemState } from '../../shared/types.js';
@@ -518,6 +519,7 @@ const apiHandler = createAPIHandler({
     wsClients: wss.clients.size,
     sensorCacheSize: historyCache.size,
     useRelay: false,
+    boardScanRateHz: getBoardScanRateHz(),
   }),
 });
 
@@ -1068,6 +1070,9 @@ elodin.on('packet', (header: any, payload: Buffer) => {
 
       const key = `${parsed.entity}.${parsed.component}`;
       stats.relayEntityUpdatesReceived++;
+
+      // Pre-throttle ingest rate (what boards/Elodin actually deliver) — not WS broadcast rate.
+      recordBoardScanIngest(parsed.entity, parsed.component);
 
       const throttle = shouldThrottleSensorStreamPacket(high, low);
       const lastBcast = broadcastLastTime.get(key) ?? 0;

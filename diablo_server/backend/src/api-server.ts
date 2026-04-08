@@ -239,6 +239,17 @@ function buildSensorConfig(): SensorConfigEntry[] {
   return sensors;
 }
 
+/** Average Hz of primary raw streams per board group from relay ingest (pre-WS-throttle). */
+export interface BoardScanRateHz {
+  pt1: number;
+  pt2: number;
+  tc: number;
+  rtd: number;
+  lc: number;
+  act: number;
+  enc: number;
+}
+
 export interface DebugInfo {
   relayConnected: boolean;
   relayPacketsReceived: number;
@@ -246,6 +257,7 @@ export interface DebugInfo {
   wsClients: number;
   sensorCacheSize: number;
   useRelay: boolean;
+  boardScanRateHz?: BoardScanRateHz;
 }
 
 export interface APIHandlerOptions {

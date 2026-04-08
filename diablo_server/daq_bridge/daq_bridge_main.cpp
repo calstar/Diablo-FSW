@@ -233,6 +233,29 @@ static uint8_t config_board_type_to_wire_u8(BoardType t) {
     }
 }
 
+/**
+ * Match config.toml board_id to the packet source IP. board_simulator uses 127.0.0.2, 127.0.0.3, …
+ * while [boards.*] lists 192.168.2.* — the main sensor path used this mapping for Elodin packet IDs.
+ * Heartbeats must use the same mapping or {0x10, low} uses the firmware slot byte (1–8) instead of
+ * config board_id (e.g. 21, 12), and the thin backend boardsStatus / Boards UI show PT/ACT disconnected.
+ */
+static const BoardConfig* resolve_board_config_by_source_ip(
+    const std::string& source_ip,
+    const std::map<std::string, BoardConfig>& board_map,
+    const BoardOrder& board_order) {
+    auto it = board_map.find(source_ip);
+    if (it != board_map.end() && it->second.enabled)
+        return &it->second;
+    if (source_ip.compare(0, 8, "127.0.0.") == 0 && !board_order.empty()) {
+        int idx = (source_ip.size() >= 9) ? (std::atoi(source_ip.c_str() + 8) - 2) : -1;
+        if (idx < 0)
+            idx = 0;
+        if (idx < static_cast<int>(board_order.size()))
+            return &board_order[static_cast<size_t>(idx)].second;
+    }
+    return nullptr;
+}
+
 int main(int argc, char* argv[]) {
     // Parse command line arguments
     std::string config_path = "config/config.toml";
@@ -513,9 +536,12 @@ int main(int argc, char* argv[]) {
                 if (Diablo::parse_board_heartbeat_packet(hb->data.data(), hb->data.size(), ph,
                                                          hb_body)) {
                     uint8_t board_type_wire = fsw::daq_wire::kUnknown;
-                    auto cfg_it = board_map.find(hb->source_ip);
-                    if (cfg_it != board_map.end()) {
-                        board_type_wire = config_board_type_to_wire_u8(cfg_it->second.type);
+                    int elodin_board_id = -1;
+                    if (const BoardConfig* hb_cfg =
+                            resolve_board_config_by_source_ip(hb->source_ip, board_map, board_order)) {
+                        board_type_wire = config_board_type_to_wire_u8(hb_cfg->type);
+                        if (hb_cfg->board_id >= 0)
+                            elodin_board_id = hb_cfg->board_id;
                     }
                     std::hash<std::string> hasher;
                     uint32_t ip_hash = static_cast<uint32_t>(hasher(hb->source_ip));
@@ -534,7 +560,7 @@ int main(int argc, char* argv[]) {
                             std::chrono::steady_clock::now().time_since_epoch())
                             .count();
                     heartbeat_router.process_heartbeat(ph, hb_body, board_type_wire,
-                                                       hb_receive_ts_ns);
+                                                       hb_receive_ts_ns, elodin_board_id);
                 }
                 // NOTE: config.toml.auto generation removed. Board discovery remains in-memory
                 // for this process only; other services must use config/config.toml.
@@ -589,18 +615,8 @@ int main(int argc, char* argv[]) {
         // ── Route based on source IP → board type (config, then 127.0.0.x simulator fallback,
         // then discovery, else treat as PT) ──
         auto board_it = board_map.find(source_ip);
-        const BoardConfig* effective_cfg = nullptr;
-        if (board_it != board_map.end() && board_it->second.enabled)
-            effective_cfg = &board_it->second;
-        else if (source_ip.compare(0, 8, "127.0.0.") == 0 && !board_order.empty()) {
-            // 127.0.0.2→first board, 127.0.0.3→second, etc. 127.0.0.1→first (fallback when bind
-            // fails)
-            int idx = (source_ip.size() >= 9) ? (std::atoi(source_ip.c_str() + 8) - 2) : -1;
-            if (idx < 0)
-                idx = 0;  // 127.0.0.1 or malformed: use first board
-            if (idx < static_cast<int>(board_order.size()))
-                effective_cfg = &board_order[idx].second;
-        }
+        const BoardConfig* effective_cfg =
+            resolve_board_config_by_source_ip(source_ip, board_map, board_order);
         // Use board type from config even when disabled — we still publish actuator/PT data to DB
         BoardType board_type = board_it != board_map.end()
                                    ? board_it->second.type
@@ -626,13 +642,18 @@ int main(int argc, char* argv[]) {
         if (elodin_connected && elodin_client.is_connected() && !batch.value().self_tests.empty()) {
             elodin_client.begin_batch();
             for (const auto& st_packet : batch.value().self_tests) {
-                // board_id is retrieved from heartbeat or routing. However, self test doesn't have
-                // board_id in the packet. We use discovery to map IP to board_id.
-                auto cfg_it = board_map.find(source_ip);
-                uint8_t board_id = (cfg_it != board_map.end() && cfg_it->second.board_id >= 0)
-                                       ? cfg_it->second.board_id
-                                       : 0;
-
+                // Self-test UDP has no board_id on wire; map source IP → config board_id.
+                // Must match sensor routing: simulators often use 127.0.0.2+ (board_order) while
+                // board_map is keyed by config IPs — without effective_cfg, board_id stayed 0 and
+                // no [0x60,*] rows reached Elodin (UI showed UNTESTED despite ACTIVE).
+                uint8_t board_id = 0;
+                if (effective_cfg && effective_cfg->board_id >= 0)
+                    board_id = static_cast<uint8_t>(effective_cfg->board_id);
+                else {
+                    auto cfg_it = board_map.find(source_ip);
+                    if (cfg_it != board_map.end() && cfg_it->second.board_id >= 0)
+                        board_id = static_cast<uint8_t>(cfg_it->second.board_id);
+                }
                 if (board_id == 0) {
                     auto discovered = discovery.get_board_by_ip(source_ip);
                     if (discovered)

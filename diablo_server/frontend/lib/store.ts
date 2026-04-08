@@ -28,7 +28,7 @@ import {
   isNotificationOngoing,
 } from './types';
 import type { VoltageRefNominals } from './voltageRef';
-import { recordSensorUpdate } from './sensor-rate';
+import { recordSensorUpdate, isSensorKeyFresh } from './sensor-rate';
 interface SensorData {
   [key: string]: number; // entity.component -> value
 }
@@ -46,6 +46,8 @@ const NOTIFICATIONS_MAX = 10;
 interface SensorSystemState {
   sensorData: SensorData;
   _updateVersion?: number; // Bumps each flush; subscribe via useSensorDataVersion()
+  /** Bumps ~4×/s so readouts re-evaluate SENSOR_DATA_STALE_MS without relying on sensorData changes. */
+  _staleRenderTick?: number;
   lastSensorFlushMs?: number; // Date.now() at last flush — for latency/freshness display
   actuators: Map<number, ActuatorUpdate>;
   currentState: SystemState | null;
@@ -289,6 +291,19 @@ export function buildAliasesFromConfig(config: any): void {
 
 export { ALIASES };
 
+/** True if any key in this stream’s alias chain had a SENSOR_UPDATE within SENSOR_DATA_STALE_MS. */
+export function isSensorStreamFresh(entity: string, component: string): boolean {
+  const key = `${entity}.${component}`;
+  if (isSensorKeyFresh(key)) return true;
+  const fallbacks = ALIASES[key];
+  if (fallbacks) {
+    for (const fb of fallbacks) {
+      if (isSensorKeyFresh(fb)) return true;
+    }
+  }
+  return false;
+}
+
 // ── Batched sensor-data updates ───────────────────────────────────────────────
 // Accumulate all incoming sensor writes (including actuator states) and flush
 // to Zustand in one batch per animation frame. This prevents dozens of
@@ -350,6 +365,7 @@ function flushSensorWrites() {
 
 export const useSensorStore = create<SensorSystemState>((set, get) => ({
   sensorData: {},
+  _staleRenderTick: 0,
   actuators: new Map(),
   currentState: SystemState.IDLE,
   connectionStatus: { connected: false, elodinConnected: false },
@@ -524,6 +540,7 @@ export const useSensorStore = create<SensorSystemState>((set, get) => ({
   },
 
   getSensorValue: (entity: string, component: string) => {
+    if (!isSensorStreamFresh(entity, component)) return null;
     const key = `${entity}.${component}`;
     const value = get().sensorData[key];
     if (value !== undefined) return value;
@@ -547,7 +564,13 @@ export const useSensorStore = create<SensorSystemState>((set, get) => ({
 
 // ── Reactive sensor-value hooks ──────────────────────────────────────────────
 
+/** Subscribe so hooks re-render when live data may cross the stale boundary (~250 ms). */
+export function useStaleRenderTick(): number {
+  return useSensorStore((s) => s._staleRenderTick ?? 0);
+}
+
 export function useSensorValue(entity: string, component: string): number | null {
+  useStaleRenderTick();
   const key = `${entity}.${component}`;
 
   const value = useSensorStore((state) => {
@@ -563,6 +586,7 @@ export function useSensorValue(entity: string, component: string): number | null
     return null;
   });
 
+  if (!isSensorStreamFresh(entity, component)) return null;
   return value;
 }
 
@@ -578,7 +602,9 @@ export function useLastSensorFlushMs(): number | undefined {
 
 /** Read sensor value at call time; does not subscribe so callers don't re-render on every sensor flush. Use useSensorValue(entity, component) for displayed values, or useSensorDataVersion() + this for pages that show many values. */
 export function useGetSensorValue(): (entity: string, component: string) => number | null {
+  const staleTick = useStaleRenderTick();
   return useCallback((entity: string, component: string): number | null => {
+    if (!isSensorStreamFresh(entity, component)) return null;
     const state = useSensorStore.getState();
     const key = `${entity}.${component}`;
     const direct = state.sensorData[key];
@@ -591,7 +617,7 @@ export function useGetSensorValue(): (entity: string, component: string) => numb
       }
     }
     return null;
-  }, []);
+  }, [staleTick]);
 }
 
 /**
@@ -599,9 +625,11 @@ export function useGetSensorValue(): (entity: string, component: string) => numb
  * Reads [0x32] commanded state (binary open/closed from sequencer).
  */
 export function useActuatorCommandedState(entity: string): ActuatorState | null {
+  useStaleRenderTick();
   const roleMapped = ACT_ROLE_TO_CMD_ENTITY[entity];
   const commanded = useSensorStore((state) => {
     const read = (e: string): number | null => {
+      if (!isSensorStreamFresh(e, 'actuator_state_commanded')) return null;
       const key = `${e}.actuator_state_commanded`;
       const direct = state.sensorData[key];
       if (direct !== undefined) return direct;

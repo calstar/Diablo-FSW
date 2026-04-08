@@ -13,6 +13,9 @@
 import { useEffect, useState } from 'react';
 
 const RATE_WINDOW_MS = 3000; // rolling window for Hz computation
+
+/** Hide readouts / stop synthetic plot extension if no SENSOR_UPDATE for this long. */
+export const SENSOR_DATA_STALE_MS = 1500;
 const MAX_TIMESTAMPS = 300; // cap buffer size per key
 const MAX_KEYS = 80; // cap total keys to prevent lag buildup
 const STALE_MS = 2 * 60 * 1000; // prune keys not updated in 2 min
@@ -95,6 +98,13 @@ export function getSensorRate(entity: string, component: string): number {
   _emaRate.set(key, smoothed);
 
   return smoothed;
+}
+
+/** True if this exact `entity.component` key had a SENSOR_UPDATE within SENSOR_DATA_STALE_MS. */
+export function isSensorKeyFresh(key: string): boolean {
+  const t = _lastUpdate.get(key);
+  if (t == null || !Number.isFinite(t)) return false;
+  return Date.now() - t < SENSOR_DATA_STALE_MS;
 }
 
 /**

@@ -11,7 +11,8 @@
  *  - getAlignedHistory() allocates once per call (unavoidable for uPlot).
  */
 
-import { useSensorStore, ALIASES } from './store';
+import { useSensorStore, ALIASES, isSensorStreamFresh } from './store';
+import { isSensorKeyFresh } from './sensor-rate';
 import { getStartupTime } from './startup-time';
 import { getWebSocketClient } from './websocket';
 import { MessageType } from './types';
@@ -173,6 +174,7 @@ class SensorDataCache {
       if (!state?.sensorData) return;
       for (const [key, value] of Object.entries(state.sensorData)) {
         if (value === null || value === undefined || !isFinite(value)) continue;
+        if (!isSensorKeyFresh(key)) continue;
         const s = this.getOrCreate(key);
         if (this.lastTime(s) < now) {
           this.ringWrite(s, now, value);
@@ -297,7 +299,12 @@ class SensorDataCache {
     const time = baseWindow.time;
     const len  = time.length;
 
-    const values = keys.map((key) => {
+    const values = keys.map((key, idx) => {
+      const entity = entities[idx];
+      const comp = componentMap[idx];
+      if (!isSensorStreamFresh(entity, comp)) {
+        return new Array<number>(len).fill(NaN);
+      }
       const s = this.findSeries(key);
       if (!s) return new Array<number>(len).fill(NaN);
       const w = this.readWindow(s, cutoff);

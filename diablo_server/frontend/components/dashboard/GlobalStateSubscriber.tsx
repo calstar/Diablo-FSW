@@ -83,5 +83,16 @@ export default function GlobalStateSubscriber() {
         updateMissionStartTime, updateCountdownTargetTime, updateBoards, updateNotification, updateActuatorExpectedPositions
     ]);
 
+    // Drive _staleRenderTick so useSensorValue / useGetSensorValue re-check SENSOR_DATA_STALE_MS
+    // even when sensorData values are unchanged (same Zustand subscription as the rest of the UI).
+    useEffect(() => {
+        const id = setInterval(() => {
+            useSensorStore.setState((s) => ({
+                _staleRenderTick: (s._staleRenderTick ?? 0) + 1,
+            }));
+        }, 250);
+        return () => clearInterval(id);
+    }, []);
+
     return null;
 }

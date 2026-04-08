@@ -416,6 +416,9 @@ const prevConnectedState = new Map<number, boolean>();
 const boardFirstSeenSetupMs = new Map<number, number>();
 const activeNotificationKeys = new Set<string>();
 const selfTestNotifiedBoards = new Set<number>();
+/** Latest self-test results — key = "SELF_TEST.BOARD_{id}.sensor_{n}", value = 0|1.
+ *  Replayed as SENSOR_UPDATE on WS connect so late-connecting browsers see results. */
+const selfTestLatest = new Map<string, SensorUpdate>();
 
 function broadcastNotification(payload: NotificationPayload): void {
   broadcast({ type: MessageType.NOTIFICATION, timestamp: Date.now(), payload });
@@ -656,6 +659,18 @@ wss.on('connection', (ws: WebSocket, req) => {
       outboundMessages++;
       lastOutboundAt = Date.now();
     }
+  }
+
+  // Self-test snapshot: replay latest results so late-connecting browsers see them.
+  // Self-test is a one-shot event during board SETUP — without this, browsers that
+  // connect after SETUP would never receive the results.
+  if (selfTestLatest.size > 0) {
+    const t = Date.now();
+    for (const update of selfTestLatest.values()) {
+      send(ws, { type: MessageType.SENSOR_UPDATE, timestamp: t, payload: update });
+    }
+    outboundMessages += selfTestLatest.size;
+    lastOutboundAt = Date.now();
   }
 
   // Historical data
@@ -993,10 +1008,13 @@ elodin.on('packet', (header: any, payload: Buffer) => {
 
     const epochNow = Date.now();
 
-    // ── Self-test failure → NOTIFICATION ────────────────────────────────
+    // ── Self-test results → snapshot + NOTIFICATION ────────────────────
     if (high === 0x60 && parsedList.length > 0) {
       const boardId = low;
       for (const parsed of parsedList) {
+        const stKey = `${parsed.entity}.${parsed.component}`;
+        selfTestLatest.set(stKey, { entity: parsed.entity, component: parsed.component, value: parsed.value, timestamp: epochNow });
+
         if (parsed.value === 0 && !selfTestNotifiedBoards.has(boardId)) {
           selfTestNotifiedBoards.add(boardId);
           const status = boardsStatus.get(boardId);

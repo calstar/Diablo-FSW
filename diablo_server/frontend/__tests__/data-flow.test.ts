@@ -12,6 +12,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useSensorStore, ALIASES, buildAliasesFromConfig } from '@/lib/store';
+import { recordSensorUpdate } from '@/lib/sensor-rate';
 import {
   SystemState,
   ActuatorState,
@@ -23,6 +24,7 @@ import { waitForSensorFlush } from './waitForSensorFlush';
 function resetStore() {
   useSensorStore.setState({
     sensorData: {},
+    _staleRenderTick: 0,
     actuators: new Map(),
     currentState: SystemState.IDLE,
     actuatorStateByEntity: {},
@@ -161,6 +163,7 @@ describe('Alias resolution via getSensorValue()', () => {
     useSensorStore.setState({
       sensorData: { 'PT1_Cal.CH1.pressure_psi': 100.5 },
     });
+    recordSensorUpdate('PT1_Cal.CH1', 'pressure_psi');
 
     const value = useSensorStore.getState().getSensorValue('PT_Cal.Fuel_Upstream', 'pressure_psi');
     expect(value).toBe(100.5);
@@ -170,6 +173,7 @@ describe('Alias resolution via getSensorValue()', () => {
     useSensorStore.setState({
       sensorData: { 'PT_Cal.Fuel_Upstream.pressure_psi': 200.0 },
     });
+    recordSensorUpdate('PT_Cal.Fuel_Upstream', 'pressure_psi');
 
     const value = useSensorStore.getState().getSensorValue('PT_Cal.Fuel_Upstream', 'pressure_psi');
     expect(value).toBe(200.0);
@@ -179,6 +183,7 @@ describe('Alias resolution via getSensorValue()', () => {
     useSensorStore.setState({
       sensorData: { 'ACT2.CH1.raw_adc_counts': 1500000 },
     });
+    recordSensorUpdate('ACT2.CH1', 'raw_adc_counts');
 
     const value = useSensorStore.getState().getSensorValue('ACT2.LOX_Main', 'raw_adc_counts');
     expect(value).toBe(1500000);
@@ -193,6 +198,7 @@ describe('Alias resolution via getSensorValue()', () => {
     useSensorStore.setState({
       sensorData: { 'LC2_Cal.CH1.raw_adc_counts': 9876543 },
     });
+    recordSensorUpdate('LC2_Cal.CH1', 'raw_adc_counts');
 
     expect(useSensorStore.getState().getSensorValue('LC2.CH1', 'raw_adc_counts')).toBe(9876543);
   });
@@ -204,6 +210,8 @@ describe('Alias resolution via getSensorValue()', () => {
         'PT_Cal.CH1.pressure_psi': 100,              // alias fallback
       },
     });
+    recordSensorUpdate('PT_Cal.Fuel_Upstream', 'pressure_psi');
+    recordSensorUpdate('PT_Cal.CH1', 'pressure_psi');
 
     const value = useSensorStore.getState().getSensorValue('PT_Cal.Fuel_Upstream', 'pressure_psi');
     expect(value).toBe(999); // Direct value wins
@@ -228,9 +236,57 @@ describe('Alias resolution via getSensorValue()', () => {
     useSensorStore.setState({
       sensorData: { 'PT1.CH1.raw_adc_counts': 1234567 },
     });
+    recordSensorUpdate('PT1.CH1', 'raw_adc_counts');
 
     const value = useSensorStore.getState().getSensorValue('PT.PT_CH1', 'raw_adc_counts');
     expect(value).toBe(1234567);
+  });
+});
+
+// ── Stale stream hiding (SENSOR_DATA_STALE_MS) ────────────────────────────────
+
+describe('Sensor stream staleness', () => {
+  it('getSensorValue returns null after stale window without new updates', async () => {
+    const { updateSensor } = useSensorStore.getState();
+
+    updateSensor({
+      entity: 'PT_Cal.PT_CH1',
+      component: 'pressure_psi',
+      value: 50,
+      timestamp: Date.now(),
+    });
+    await waitForSensorFlush();
+
+    expect(useSensorStore.getState().getSensorValue('PT_Cal.PT_CH1', 'pressure_psi')).toBe(50);
+
+    await new Promise((r) => setTimeout(r, 1600));
+
+    expect(useSensorStore.getState().getSensorValue('PT_Cal.PT_CH1', 'pressure_psi')).toBeNull();
+  });
+
+  it('getSensorValue stays valid when updates continue within stale window', async () => {
+    const { updateSensor } = useSensorStore.getState();
+
+    updateSensor({
+      entity: 'PT_Cal.PT_CH1',
+      component: 'pressure_psi',
+      value: 50,
+      timestamp: Date.now(),
+    });
+    await waitForSensorFlush();
+
+    await new Promise((r) => setTimeout(r, 400));
+    updateSensor({
+      entity: 'PT_Cal.PT_CH1',
+      component: 'pressure_psi',
+      value: 51,
+      timestamp: Date.now(),
+    });
+    await waitForSensorFlush();
+
+    await new Promise((r) => setTimeout(r, 400));
+
+    expect(useSensorStore.getState().getSensorValue('PT_Cal.PT_CH1', 'pressure_psi')).toBe(51);
   });
 });
 

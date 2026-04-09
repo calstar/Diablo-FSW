@@ -968,9 +968,9 @@ int main(int argc, char* argv[]) {
             if (block_offset == 0 || block_offset > 10)
                 continue;  // channel must be 1-10
         } else {
-            // ACT raw 0x30 only: our calibrated republish uses type_hi 0x31, so 0x30 is never our echo.
-            // Allow 0x0B–0x0F (wire indices 11–15) which the old `> 10` guard dropped; decodeLow uses
-            // (block_offset & 0x0F) for the logical channel nibble.
+            // ACT raw 0x30 only: our calibrated republish uses type_hi 0x31, so 0x30 is never our
+            // echo. Allow 0x0B–0x0F (wire indices 11–15) which the old `> 10` guard dropped;
+            // decodeLow uses (block_offset & 0x0F) for the logical channel nibble.
             if (block_offset == 0 || block_offset > 0x0F)
                 continue;
         }

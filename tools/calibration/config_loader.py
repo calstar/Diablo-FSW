@@ -223,7 +223,7 @@ def packet_ch_for_board_connector(
     stype: str, board_slot: int, connector: int
 ) -> Optional[int]:
     """
-    Map physical board slot + connector to orchestrator/HP map packet channel (connector + channel_offset).
+    Map physical board slot + connector to packet channel id (local connector 1–10; same as Elodin/daq_bridge).
     """
     for board in get_boards_by_type(stype):
         if not board.get("enabled", True):
@@ -233,21 +233,20 @@ def packet_ch_for_board_connector(
         slot = 10 if mod == 0 else mod
         if slot != board_slot:
             continue
-        ch_offset = int(board.get("channel_offset", 0) or 0)
         active = board.get("active_connectors", [])
         if not active:
             num = int(board.get("num_sensors", 10) or 10)
             active = list(range(1, num + 1))
         if connector not in active:
             continue
-        return int(connector + ch_offset)
+        return int(connector)
     return None
 
 
 def build_channel_to_orchestrator_key() -> Dict[tuple, tuple]:
     """
     Build mapping (stype, packet_channel_id) → (stype, unique_ch) for relay packets.
-    daq_bridge sends packet_id low = connector_id + channel_offset; orchestrator uses
+    Packet channel id is the local connector (1–10), matching daq_bridge / Elodin low-byte scheme.
     unique_ch = board_id * 100 + connector_id. Returns dict for PT, TC, RTD, LC.
     """
     mapping: Dict[tuple, tuple] = {}
@@ -256,13 +255,12 @@ def build_channel_to_orchestrator_key() -> Dict[tuple, tuple]:
             if not board.get("enabled", True):
                 continue
             board_id = board.get("board_id", 1)
-            ch_offset = board.get("channel_offset", 0)
             active = board.get("active_connectors", [])
             if not active:
                 num = board.get("num_sensors", 10)
                 active = list(range(1, num + 1))
             for conn in active:
-                packet_ch = conn + ch_offset
+                packet_ch = conn
                 unique_ch = board_id * 100 + conn
                 mapping[(stype, packet_ch)] = (stype, unique_ch)
     return mapping
@@ -277,7 +275,6 @@ def get_hp_pt_packet_channels() -> Dict[int, dict]:
     for board in get_boards_by_type("PT"):
         if not board.get("enabled", True) or not board.get("hp_pt_connectors"):
             continue
-        ch_offset = board.get("channel_offset", 0)
         hp_conns = board.get("hp_pt_connectors", [])
         if not isinstance(hp_conns, (list, tuple)):
             continue
@@ -287,7 +284,7 @@ def get_hp_pt_packet_channels() -> Dict[int, dict]:
             "adc_ref_voltage": float(board.get("adc_ref_voltage", 2.5)),
         }
         for conn in hp_conns:
-            result[conn + ch_offset] = cfg
+            result[conn] = cfg
     return result
 
 
@@ -305,8 +302,7 @@ def get_excitation_packet_channels() -> Dict[int, dict]:
         exc_conn = board.get("excitation_connector_id", -1)
         if not isinstance(exc_conn, int) or exc_conn < 1:
             continue
-        ch_offset = int(board.get("channel_offset", 0) or 0)
-        result[exc_conn + ch_offset] = {
+        result[exc_conn] = {
             "adc_ref_voltage": float(board.get("adc_ref_voltage", 2.5)),
             "divider_attenuation": float(board.get("excitation_divider_attenuation", 1.0)),
         }
@@ -321,13 +317,12 @@ def build_orchestrator_key_to_packet_ch() -> Dict[tuple, int]:
             if not board.get("enabled", True):
                 continue
             board_id = board.get("board_id", 1)
-            ch_offset = board.get("channel_offset", 0)
             active = board.get("active_connectors", [])
             if not active:
                 num = board.get("num_sensors", 10)
                 active = list(range(1, num + 1))
             for conn in active:
-                packet_ch = conn + ch_offset
+                packet_ch = conn
                 unique_ch = board_id * 100 + conn
                 mapping[(stype, unique_ch)] = packet_ch
     return mapping

@@ -199,6 +199,36 @@ And log each failed attempt at `DEBUG` level so it's visible when diagnosing iss
 
 ---
 
+### Sensor Info — dual ADC columns (cal + raw) for debugging
+
+**Files:** `diablo_server/frontend/app/sensor-info/page.tsx`
+
+Currently the Sensor Info table shows a single ADC column sourced from the calibrated entity (`*_Cal.CH*.raw_adc_counts`), which is the reliable production path. For debugging purposes it would be useful to display both:
+
+- **Cal ADC** — `*_Cal.CH*.raw_adc_counts` (current column; always present when calibration_service is running)
+- **Raw ADC** — `*.CH*.raw_adc_counts` (the raw entity stream direct from the relay, before calibration_service touches it)
+
+Showing both side by side lets engineers confirm the raw vtable is arriving, spot firmware-side ADC glitches independently of calibration, and verify that the two values agree (they should be identical integers).
+
+**Implementation sketch:**
+- Add a second `useSensorValue(sensor.rawEntity, 'raw_adc_counts')` call alongside the existing cal one in each row component (`PtRow`, `HptRow`, `TcRow`, `RtdRow`, `LcRow`, `ActRow`).
+- Add a "Raw ADC" column header next to the existing "ADC (cal)" column in each `SensorTable`.
+- Render both values; show `---` when the raw entity stream is stale (it is expected to sometimes be absent — that is not a bug).
+- Consider making the second column opt-in (e.g. a "debug" toggle in the page header) so the table doesn't become too wide by default.
+
+---
+
+### Runtime — Controller sometimes never gets service (reload UI during server startup)
+**Symptoms:** The controller service / controller path appears to never receive traffic or never “comes up” from the stack’s point of view. Operators have seen this correlate with **reloading frontend tabs or hard-refreshing the browser while the backend and related services are still starting**.
+
+**Hypothesis (unconfirmed):** A race during startup: WebSocket clients connect, subscribe, or send messages before the server has finished binding the controller TCP client, registering routes, or completing config load. Reloading the SPA may create duplicate connections, reorder handshake vs. subscription, or hit a code path that assumes a single stable client lifetime. Another angle is **ordering** between HTTP `/api/*` and WS — e.g. the UI assumes config is ready before the controller bridge is live.
+
+**What to do when investigating:** Capture timestamps for (1) backend listen, (2) first WebSocket accept, (3) first `sendToControllerService` / controller TCP connect success, (4) frontend `getWebSocketClient` connect. Reproduce by starting the full stack and refreshing the dashboard repeatedly during the first few seconds. Compare with a run where the UI is opened only after the stack is idle.
+
+**Fix direction (TBD):** Harden startup so the controller link is explicit in health/debug (`/api/debug` or a dedicated readiness probe); retry controller TCP with backoff; or delay accepting actuator/controller-critical WS commands until `controller` connectivity is confirmed — and document “wait for green” in dev workflows until fixed.
+
+---
+
 ### Frontend — API response shapes typed as `any`
 **Files:** `diablo_server/frontend/lib/dashboard-hooks.ts`, `diablo_server/frontend/app/config/page.tsx:661-739`
 

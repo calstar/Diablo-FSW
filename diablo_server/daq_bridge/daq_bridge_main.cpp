@@ -449,7 +449,7 @@ int main(int argc, char* argv[]) {
     fsw::elodin::ElodinClient elodin_client;
     fsw::routing::HeartbeatRouter heartbeat_router(elodin_client);
     bool elodin_connected = false;
-    // Collect active boards with local channels from config (board-namespaced, no channel_offset)
+    // Collect active boards with local channels from config (board-namespaced)
     auto active_boards = fsw::config::load_active_boards(config_path);
     const auto& pt_boards = active_boards[BoardType::PT];
     const auto& act_boards = active_boards[BoardType::ACTUATOR];

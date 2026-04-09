@@ -11,13 +11,27 @@
  */
 
 import { useEffect, useState } from 'react';
+import type { BoardStatus } from '@/lib/types';
 
 const RATE_WINDOW_MS = 3000; // rolling window for Hz computation
 
 /** Hide readouts / stop synthetic plot extension if no SENSOR_UPDATE for this long. */
 export const SENSOR_DATA_STALE_MS = 1500;
+
+/** Boards / Heartbeats pane only: longer window than sensor grid (lower update rate; avoids flicker). */
+export const BOARD_LIVE_TELEMETRY_STALE_MS = 3000;
+
+/**
+ * Boards / Heartbeats: hide live connection/state/Hz after BOARD_LIVE_TELEMETRY_STALE_MS without a new
+ * hardware heartbeat (uses server `lastHeartbeatMs`). Invalid/missing timestamps do not force stale.
+ */
+export function isBoardLiveTelemetryStale(b: BoardStatus): boolean {
+  const t = b.lastHeartbeatMs;
+  if (t == null || typeof t !== 'number' || !Number.isFinite(t) || t <= 0) return false;
+  return Date.now() - t >= BOARD_LIVE_TELEMETRY_STALE_MS;
+}
 const MAX_TIMESTAMPS = 300; // cap buffer size per key
-const MAX_KEYS = 80; // cap total keys to prevent lag buildup
+const MAX_KEYS = 500; // cap total keys; sized for a full cal+raw entity set (~200 active keys in production)
 const STALE_MS = 2 * 60 * 1000; // prune keys not updated in 2 min
 const EMA_ALPHA = 0.3; // smoothing factor (0..1); lower = smoother
 let _lastPrune = 0;

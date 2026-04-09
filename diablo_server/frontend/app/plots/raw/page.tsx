@@ -11,9 +11,7 @@ export default function RawReadoutsPage() {
   const allSensors = useSensorConfig();
 
   const labels = allSensors.map((s) => s.role);
-  const entities = allSensors.map((s) => s.entity);
   const calEntities = allSensors.map((s) => s.calEntity);
-  const colors = entities.map((e) => getEntityColor(e));
   const calColors = calEntities.map((e) => getEntityColor(e));
   const half = Math.ceil(allSensors.length / 2);
 
@@ -27,15 +25,15 @@ export default function RawReadoutsPage() {
         </span>
       </div>
 
-      {/* Live readout strips */}
+      {/* Live readout strips — raw_adc_counts from cal entity (always published with converted value) */}
       <div className="flex-shrink-0">
         <SensorReadoutStrip sensors={
           allSensors.map((s) => ({
             label: s.role,
-            entity: s.entity,
+            entity: s.calEntity,
             component: 'raw_adc_counts',
             unit: 'ADC',
-            color: getEntityColor(s.entity),
+            color: getEntityColor(s.calEntity),
             decimals: 0,
           }))
         } />
@@ -47,10 +45,10 @@ export default function RawReadoutsPage() {
         <div className="bg-card rounded-lg p-3 flex flex-col min-h-0 min-w-0" style={{ minHeight: '250px' }}>
           <TimeSeriesPlot
             title={`PT CH 1–${half}  •  Raw ADC Counts`}
-            entities={entities.slice(0, half)}
+            entities={calEntities.slice(0, half)}
             labels={labels.slice(0, half)}
             component="raw_adc_counts"
-            colors={colors.slice(0, half)}
+            colors={calColors.slice(0, half)}
             yLabel="ADC Counts"
           />
         </div>
@@ -58,10 +56,10 @@ export default function RawReadoutsPage() {
         <div className="bg-card rounded-lg p-3 flex flex-col min-h-0 min-w-0" style={{ minHeight: '250px' }}>
           <TimeSeriesPlot
             title={`PT CH ${half + 1}–${allSensors.length}  •  Raw ADC Counts`}
-            entities={entities.slice(half)}
+            entities={calEntities.slice(half)}
             labels={labels.slice(half)}
             component="raw_adc_counts"
-            colors={colors.slice(half)}
+            colors={calColors.slice(half)}
             yLabel="ADC Counts"
           />
         </div>

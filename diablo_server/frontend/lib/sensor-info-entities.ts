@@ -143,8 +143,10 @@ export function buildActChannelsFromBoards(boards: Record<string, unknown>): {
   entity: string;
   calEntity: string;
   label: string;
+  boardId: number;
+  localCh: number;
 }[] {
-  const out: { entity: string; calEntity: string; label: string }[] = [];
+  const out: { entity: string; calEntity: string; label: string; boardId: number; localCh: number }[] = [];
   for (const board of Object.values(boards)) {
     const b = board as Record<string, unknown>;
     if (b.type !== 'ACTUATOR' || b.enabled === false) continue;
@@ -159,6 +161,8 @@ export function buildActChannelsFromBoards(boards: Record<string, unknown>): {
         entity: `ACT${bn}.CH${ch}`,
         calEntity: `ACT${bn}_Cal.CH${ch}`,
         label: `B${boardId} Ch${ch}`,
+        boardId,
+        localCh: ch,
       });
     }
   }
@@ -195,4 +199,6 @@ export const SENSOR_INFO_DEFAULT_ACT_DATA = Array.from({ length: 10 }, (_, i) =>
   entity: `ACT2.CH${i + 1}`,
   calEntity: `ACT2_Cal.CH${i + 1}`,
   label: `B12 Ch${i + 1}`,
+  boardId: 12,
+  localCh: i + 1,
 }));

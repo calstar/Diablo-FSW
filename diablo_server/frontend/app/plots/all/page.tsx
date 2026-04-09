@@ -73,9 +73,10 @@ function RawTab({ sensors }: { sensors: SensorConfig[] }) {
   const first = sensors.slice(0, half);
   const second = sensors.slice(half);
 
-  const mkEntities = (s: SensorConfig[]) => s.map((x) => x.entity);
+  // Use calEntity so raw_adc_counts comes from the cal packet (always published together with converted value).
+  const mkEntities = (s: SensorConfig[]) => s.map((x) => x.calEntity);
   const mkLabels = (s: SensorConfig[]) => s.map((x) => x.role);
-  const mkColors = (s: SensorConfig[]) => s.map((x) => getEntityColor(x.entity));
+  const mkColors = (s: SensorConfig[]) => s.map((x) => getEntityColor(x.calEntity));
 
   return (
     <div className="flex flex-col h-full gap-2">

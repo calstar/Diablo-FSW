@@ -85,11 +85,15 @@ describe('Sensor Info entity names (must match Elodin /api/sensor-config)', () =
       entity: 'ACT2.CH1',
       calEntity: 'ACT2_Cal.CH1',
       label: 'B12 Ch1',
+      boardId: 12,
+      localCh: 1,
     });
     expect(act4[9]).toMatchObject({
       entity: 'ACT4.CH10',
       calEntity: 'ACT4_Cal.CH10',
       label: 'B14 Ch10',
+      boardId: 14,
+      localCh: 10,
     });
 
     const enc = buildEncoderDataFromBoards(INTEGRATION_LIKE_BOARDS, {

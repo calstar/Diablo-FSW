@@ -461,8 +461,7 @@ async function connectWS(): Promise<WebSocket> {
 
 // ── Expected entities from config.toml enabled boards ────────────────────────
 // Entity names use sensor_roles from config (spaces → underscores). Boards
-// without role mappings use generic CHx names. Channels use channel_offset
-// for second boards of the same type.
+// without role mappings use generic CHx names. Elodin uses local CH1–CH10 per board slot.
 //
 // pt_board    (id 21): [sensor_roles_pt_board] maps connectors 1-10 to named PTs
 // pt_board_2  (id 22): [sensor_roles_pt2] maps connectors 1,3,4 to named HP PTs
@@ -839,10 +838,7 @@ function fetchBackendStats(): Promise<BackendStats | null> {
 async function testSensorDataFlow(ws: WebSocket): Promise<void> {
   console.log('\n📡 Test 1: Sensor Data Flow');
 
-  // Subscribe to all channel types. Channels go up to 20 because boards of
-  // the same type use channel_offset to create a global namespace:
-  //   board 1: offset 0  → CH1-CH10
-  //   board 2: offset 10 → CH11-CH20
+  // Subscribe to CH1–CH20 per prefix so we don’t miss updates (wide net; Elodin entities are still CH1–CH10 per slot).
   // Board-namespaced prefixes: subscribe to all possible board numbers
   const sensorPrefixes = [
     'PT1.CH', 'PT2.CH', 'PT1_Cal.CH', 'PT2_Cal.CH',

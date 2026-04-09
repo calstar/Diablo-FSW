@@ -97,8 +97,9 @@ function rtdAdcToResistanceOhm(adc: number, refV: number = 2.5, excitationUa: nu
   return (Math.abs(volt) * 1e6) / excitationUa;
 }
 
-function RTDRawReadout({ entity, label, color }: { entity: string; label: string; color: string }) {
-  const raw = useSensorValue(entity, 'raw_resistance_counts');
+function RTDRawReadout({ calEntity, label, color }: { calEntity: string; label: string; color: string }) {
+  // Cal packet carries raw ADC u32 (same field as PT/TC/LC) — use raw_adc_counts on cal entity.
+  const raw = useSensorValue(calEntity, 'raw_adc_counts');
   const rOhm = raw !== null ? rtdAdcToResistanceOhm(raw) : null;
   const display = raw !== null ? raw.toLocaleString('en-US', { maximumFractionDigits: 0 }) : '—';
   return (
@@ -255,7 +256,7 @@ export default function LCS_TCS_RTDPage() {
                 <div className="flex-shrink-0">
                   <SensorReadoutStrip
                     variant="compact"
-                    sensors={tcEntities.map((entity, i) => ({
+                    sensors={tcCalEntities.map((entity, i) => ({
                       label: `${tcLabels[i]} ADC`,
                       entity,
                       component: 'raw_adc_counts',
@@ -305,10 +306,10 @@ export default function LCS_TCS_RTDPage() {
                   ))}
                 </div>
                 <div className="flex flex-wrap gap-1.5 flex-shrink-0">
-                  {rtdEntities.map((entity, i) => (
+                  {rtdCalEntities.map((calEntity, i) => (
                     <RTDRawReadout
-                      key={entity}
-                      entity={entity}
+                      key={calEntity}
+                      calEntity={calEntity}
                       label={`${rtdLabels[i]} ADC`}
                       color={SENSE_COLORS[i % SENSE_COLORS.length]}
                     />
@@ -356,7 +357,7 @@ export default function LCS_TCS_RTDPage() {
                 <div className="flex flex-wrap gap-2 flex-shrink-0">
                   <SensorReadoutStrip
                     variant="compact"
-                    sensors={lcEntities.map((entity, i) => ({
+                    sensors={lcCalEntities.map((entity, i) => ({
                       label: `${lcLabels[i]} ADC`,
                       entity,
                       component: 'raw_adc_counts',

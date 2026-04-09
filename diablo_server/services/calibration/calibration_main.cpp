@@ -553,7 +553,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // Parse HP PT config (4-20 mA) — uses local connector IDs (no channel_offset)
+    // Parse HP PT config (4-20 mA) — local connector IDs
     // board_simulator.py back-calculates i_ma from the target PSI and sends valid
     // 4-20 mA ADC codes for HP PT connectors, so the 4-20 mA path is correct in
     // both sim and real-hardware modes.
@@ -987,10 +987,18 @@ int main(int argc, char* argv[]) {
         // Check if this is a calibrated packet (our own output) by testing if
         // the offset within the block is >= 0x10
         uint8_t block_offset = type_lo & 0x1F;  // position within 32-slot block
-        if (block_offset >= 0x10)
-            continue;  // calibrated packet (our own output)
-        if (block_offset == 0 || block_offset > 10)
-            continue;  // channel must be 1-10
+        if (type_hi != 0x30) {
+            if (block_offset >= 0x10)
+                continue;  // calibrated packet (our own output)
+            if (block_offset == 0 || block_offset > 10)
+                continue;  // channel must be 1-10
+        } else {
+            // ACT raw 0x30 only: our calibrated republish uses type_hi 0x31, so 0x30 is never our echo.
+            // Allow 0x0B–0x0F (wire indices 11–15) which the old `> 10` guard dropped; decodeLow uses
+            // (block_offset & 0x0F) for the logical channel nibble.
+            if (block_offset == 0 || block_offset > 0x0F)
+                continue;
+        }
 
         const ssize_t payload_len = pkt_len - 8;
         if (payload_len < 21) {

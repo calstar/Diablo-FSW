@@ -523,7 +523,7 @@ export default function CalibrationPage() {
               key={`${ch.boardId}-${ch.id}`}
               ch={ch}
               status={getStatus(ch.id, ch.boardId)}
-              rawAdc={getSensorValue(ch.entity, 'raw_adc_counts')}
+              rawAdc={getSensorValue(ch.calEntity, 'raw_adc_counts')}
               calPsi={getSensorValue(ch.calEntity, 'pressure_psi')}
               onCapture={handleCapture}
             />

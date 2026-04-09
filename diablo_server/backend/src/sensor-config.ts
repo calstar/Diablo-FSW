@@ -59,7 +59,7 @@ export function loadSensorRoleMap(): {
                 reverseMap[channelId] = `PT_Cal.${entityName}`;
             }
         }
-        // PT board 2 (sensor_roles_pt2) — packet uses connector+channel_offset, so key = connector+10
+        // PT board 2 (sensor_roles_pt2): reverseMap keys use connector+10 so HP PT roles don’t collide with board 1’s channel ids in this legacy map (hardcoded here, not from config).
         for (const [roleName, channelId] of Object.entries(sensorRolesPt2)) {
             if (typeof channelId === 'number' && channelId >= 1 && channelId <= 10) {
                 const entityName = roleName.replace(/\s+/g, '_');

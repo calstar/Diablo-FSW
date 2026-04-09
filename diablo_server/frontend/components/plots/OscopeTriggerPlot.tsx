@@ -22,10 +22,9 @@ const ENC_COLORS = ['#3B82F6', '#F97316'];
 
 type TriggerState = 'IDLE' | 'ARMED' | 'TRIGGERED';
 
-interface Sample {
-  timeMs: number;
-  enc1Deg: number;
-  enc2Deg: number;
+interface ChannelSample {
+  t: number; // ms (Date.now)
+  v: number; // degrees
 }
 
 export interface TransitionResult {
@@ -85,6 +84,12 @@ export function detectTransition(
   return null;
 }
 
+const medianOf = (arr: number[]) => {
+  const sorted = [...arr].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+};
+
 export default function OscopeTriggerPlot() {
   const containerRef = useRef<HTMLDivElement>(null);
   const plotDivRef = useRef<HTMLDivElement>(null);
@@ -98,14 +103,16 @@ export default function OscopeTriggerPlot() {
   const [enc2Result, setEnc2Result] = useState<TransitionResult | null>(null);
   const [leaderLabel, setLeaderLabel] = useState('');
 
-  const circularBuffer = useRef<Sample[]>([]);
-  const baselineEnc1 = useRef<number[]>([]);
-  const baselineEnc2 = useRef<number[]>([]);
+  // Per-channel circular buffers — each only contains samples actually received
+  // for that channel, so dots are at real receive timestamps.
+  const buf1 = useRef<ChannelSample[]>([]);
+  const buf2 = useRef<ChannelSample[]>([]);
+  const baseline1 = useRef<number[]>([]);
+  const baseline2 = useRef<number[]>([]);
+
   const triggerTimeMs = useRef<number | null>(null);
   const overlayDataRef = useRef<OverlayData | null>(null);
 
-  const latestEnc1 = useRef<number>(NaN);
-  const latestEnc2 = useRef<number>(NaN);
   const lastEncoderPacketMsRef = useRef<number | null>(null);
 
   const staleClock = useStaleRenderTick();
@@ -115,10 +122,15 @@ export default function OscopeTriggerPlot() {
     setTriggerState(s);
   }, []);
 
+  const clearAllBuffers = () => {
+    buf1.current = [];
+    buf2.current = [];
+    baseline1.current = [];
+    baseline2.current = [];
+  };
+
   const handleArm = useCallback(() => {
-    circularBuffer.current = [];
-    baselineEnc1.current = [];
-    baselineEnc2.current = [];
+    clearAllBuffers();
     triggerTimeMs.current = null;
     overlayDataRef.current = null;
     setSkewMs(null);
@@ -126,7 +138,6 @@ export default function OscopeTriggerPlot() {
     setEnc2Result(null);
     setLeaderLabel('');
 
-    // Clear the plot
     const plot = uplotRef.current;
     if (plot) {
       plot.setData([new Float64Array(0), new Float64Array(0), new Float64Array(0)]);
@@ -150,103 +161,14 @@ export default function OscopeTriggerPlot() {
     }
   }, [setState]);
 
-  // Subscribe to encoder updates
-  useEffect(() => {
-    const ws = getWebSocketClient();
+  const analyzeAndRender = useCallback((cap1: ChannelSample[], cap2: ChannelSample[], tTrig: number) => {
+    const times1 = cap1.map((s) => s.t - tTrig);
+    const vals1 = cap1.map((s) => s.v);
+    const times2 = cap2.map((s) => s.t - tTrig);
+    const vals2 = cap2.map((s) => s.v);
 
-    const unsub = ws.on(MessageType.SENSOR_UPDATE, (p: unknown) => {
-      const update = p as SensorUpdate;
-      if (update.component !== 'raw_angle') return;
-      const e = update.entity;
-      if (e === 'ENC1.CH1' || e === 'ENC.CH1') latestEnc1.current = rawToDeg(update.value);
-      else if (e === 'ENC1.CH2' || e === 'ENC.CH2') latestEnc2.current = rawToDeg(update.value);
-      else return;
-
-      lastEncoderPacketMsRef.current = Date.now();
-
-      if (triggerStateRef.current === 'TRIGGERED') return;
-
-      const nowMs = Date.now();
-      const enc1 = latestEnc1.current;
-      const enc2 = latestEnc2.current;
-      if (isNaN(enc1) || isNaN(enc2)) return;
-
-      const sample: Sample = { timeMs: nowMs, enc1Deg: enc1, enc2Deg: enc2 };
-      const buf = circularBuffer.current;
-      buf.push(sample);
-
-      const cutoff = nowMs - BUFFER_DURATION_MS;
-      while (buf.length > 0 && buf[0].timeMs < cutoff) buf.shift();
-
-      if (triggerStateRef.current !== 'ARMED') return;
-
-      // Collecting post-trigger data
-      if (triggerTimeMs.current !== null) {
-        if (nowMs - triggerTimeMs.current >= POST_TRIGGER_COLLECT_MS) {
-          const tTrig = triggerTimeMs.current;
-          const windowStart = tTrig - CAPTURE_HALF_MS;
-          const windowEnd = tTrig + CAPTURE_HALF_MS;
-          const captured = buf.filter((s) => s.timeMs >= windowStart && s.timeMs <= windowEnd);
-          setState('TRIGGERED');
-          analyzeAndRender(captured, tTrig);
-        }
-        return;
-      }
-
-      // Update baselines
-      baselineEnc1.current.push(enc1);
-      baselineEnc2.current.push(enc2);
-      if (baselineEnc1.current.length > BASELINE_SAMPLE_COUNT) baselineEnc1.current.shift();
-      if (baselineEnc2.current.length > BASELINE_SAMPLE_COUNT) baselineEnc2.current.shift();
-
-      if (baselineEnc1.current.length < 3) return;
-
-      const medianOf = (arr: number[]) => {
-        const sorted = [...arr].sort((a, b) => a - b);
-        const mid = Math.floor(sorted.length / 2);
-        return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-      };
-
-      const b1 = medianOf(baselineEnc1.current);
-      const b2 = medianOf(baselineEnc2.current);
-      const d1 = Math.abs(enc1 - b1);
-      const d2 = Math.abs(enc2 - b2);
-
-      if (d1 > TRIGGER_THRESHOLD_DEG || d2 > TRIGGER_THRESHOLD_DEG) {
-        triggerTimeMs.current = nowMs;
-      }
-    });
-
-    return () => unsub();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setState]);
-
-  // Clear live ARMED preview when encoder packets stop (same stale window as dashboard).
-  useEffect(() => {
-    const last = lastEncoderPacketMsRef.current;
-    if (last == null) return;
-    if (Date.now() - last < SENSOR_DATA_STALE_MS) return;
-    if (triggerStateRef.current !== 'ARMED') return;
-    circularBuffer.current = [];
-    baselineEnc1.current = [];
-    baselineEnc2.current = [];
-    latestEnc1.current = NaN;
-    latestEnc2.current = NaN;
-    const plot = uplotRef.current;
-    if (plot) {
-      plot.setData([new Float64Array(0), new Float64Array(0), new Float64Array(0)]);
-    }
-  }, [staleClock]);
-
-  const analyzeAndRender = useCallback((captured: Sample[], tTrig: number) => {
-    if (captured.length < 4) return;
-
-    const times = captured.map((s) => s.timeMs - tTrig);
-    const enc1Vals = captured.map((s) => s.enc1Deg);
-    const enc2Vals = captured.map((s) => s.enc2Deg);
-
-    const r1 = detectTransition(times, enc1Vals);
-    const r2 = detectTransition(times, enc2Vals);
+    const r1 = detectTransition(times1, vals1);
+    const r2 = detectTransition(times2, vals2);
 
     setEnc1Result(r1);
     setEnc2Result(r2);
@@ -270,28 +192,123 @@ export default function OscopeTriggerPlot() {
     setSkewMs(computedSkew);
     setLeaderLabel(leader);
 
-    // Store overlay data so the draw hook can re-render markers on resize
     overlayDataRef.current = { r1, r2, t0Offset };
 
-    // Render to uPlot with times relative to first transition
-    const relTimes = times.map((t) => t - t0Offset);
-    const timeArr = new Float64Array(relTimes);
-    const enc1Arr = new Float64Array(enc1Vals);
-    const enc2Arr = new Float64Array(enc2Vals);
+    // Build merged-time aligned arrays for uPlot. Each channel's points only
+    // exist on its own real receive timestamps; gaps for the other channel
+    // become NaN so points won't render there.
+    const rel1 = times1.map((t) => t - t0Offset);
+    const rel2 = times2.map((t) => t - t0Offset);
+
+    const merged = Array.from(new Set<number>([...rel1, ...rel2])).sort((a, b) => a - b);
+    const xs = new Float64Array(merged);
+    const y1 = new Float64Array(merged.length);
+    const y2 = new Float64Array(merged.length);
+
+    const map1 = new Map<number, number>();
+    for (let i = 0; i < rel1.length; i++) map1.set(rel1[i], vals1[i]);
+    const map2 = new Map<number, number>();
+    for (let i = 0; i < rel2.length; i++) map2.set(rel2[i], vals2[i]);
+
+    for (let i = 0; i < merged.length; i++) {
+      const x = merged[i];
+      y1[i] = map1.has(x) ? (map1.get(x) as number) : NaN;
+      y2[i] = map2.has(x) ? (map2.get(x) as number) : NaN;
+    }
 
     const plot = uplotRef.current;
     if (!plot) return;
 
-    const xExtent = Math.max(Math.abs(Math.min(...relTimes)), Math.abs(Math.max(...relTimes)));
-    const allVals = [...enc1Vals, ...enc2Vals].filter(isFinite);
-    const yMin = Math.min(...allVals);
-    const yMax = Math.max(...allVals);
+    if (merged.length === 0) {
+      plot.setData([new Float64Array(0), new Float64Array(0), new Float64Array(0)]);
+      return;
+    }
+
+    const xExtent = Math.max(Math.abs(merged[0]), Math.abs(merged[merged.length - 1]));
+    const finiteVals = [...vals1, ...vals2].filter(isFinite);
+    const yMin = finiteVals.length ? Math.min(...finiteVals) : 0;
+    const yMax = finiteVals.length ? Math.max(...finiteVals) : 360;
     const yPad = Math.max((yMax - yMin) * 0.15, 5);
 
     plot.setScale('x', { min: -xExtent, max: xExtent });
     plot.setScale('y', { min: yMin - yPad, max: yMax + yPad });
-    plot.setData([timeArr, enc1Arr, enc2Arr]);
+    plot.setData([xs, y1, y2]);
   }, []);
+
+  // Subscribe to encoder updates
+  useEffect(() => {
+    const ws = getWebSocketClient();
+
+    const unsub = ws.on(MessageType.SENSOR_UPDATE, (p: unknown) => {
+      const update = p as SensorUpdate;
+      if (update.component !== 'raw_angle') return;
+      const e = update.entity;
+
+      let buf: ChannelSample[];
+      let baseline: number[];
+      if (e === 'ENC1.CH1' || e === 'ENC.CH1') {
+        buf = buf1.current;
+        baseline = baseline1.current;
+      } else if (e === 'ENC1.CH2' || e === 'ENC.CH2') {
+        buf = buf2.current;
+        baseline = baseline2.current;
+      } else {
+        return;
+      }
+
+      const nowMs = Date.now();
+      const deg = rawToDeg(update.value);
+      lastEncoderPacketMsRef.current = nowMs;
+
+      if (triggerStateRef.current === 'TRIGGERED') return;
+
+      buf.push({ t: nowMs, v: deg });
+      const cutoff = nowMs - BUFFER_DURATION_MS;
+      while (buf.length > 0 && buf[0].t < cutoff) buf.shift();
+
+      if (triggerStateRef.current !== 'ARMED') return;
+
+      // Collecting post-trigger data
+      if (triggerTimeMs.current !== null) {
+        if (nowMs - triggerTimeMs.current >= POST_TRIGGER_COLLECT_MS) {
+          const tTrig = triggerTimeMs.current;
+          const wStart = tTrig - CAPTURE_HALF_MS;
+          const wEnd = tTrig + CAPTURE_HALF_MS;
+          const cap1 = buf1.current.filter((s) => s.t >= wStart && s.t <= wEnd);
+          const cap2 = buf2.current.filter((s) => s.t >= wStart && s.t <= wEnd);
+          setState('TRIGGERED');
+          analyzeAndRender(cap1, cap2, tTrig);
+        }
+        return;
+      }
+
+      // Update this channel's baseline median
+      baseline.push(deg);
+      if (baseline.length > BASELINE_SAMPLE_COUNT) baseline.shift();
+      if (baseline.length < 3) return;
+
+      const med = medianOf(baseline);
+      if (Math.abs(deg - med) > TRIGGER_THRESHOLD_DEG) {
+        triggerTimeMs.current = nowMs;
+      }
+    });
+
+    return () => unsub();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setState, analyzeAndRender]);
+
+  // Clear live ARMED preview when encoder packets stop (same stale window as dashboard).
+  useEffect(() => {
+    const last = lastEncoderPacketMsRef.current;
+    if (last == null) return;
+    if (Date.now() - last < SENSOR_DATA_STALE_MS) return;
+    if (triggerStateRef.current !== 'ARMED') return;
+    clearAllBuffers();
+    const plot = uplotRef.current;
+    if (plot) {
+      plot.setData([new Float64Array(0), new Float64Array(0), new Float64Array(0)]);
+    }
+  }, [staleClock]);
 
   // Create uPlot instance with a draw hook for overlays
   useEffect(() => {
@@ -303,15 +320,17 @@ export default function OscopeTriggerPlot() {
 
       const ctx = u.ctx;
       const { r1, r2, t0Offset } = od;
+      const dpr = devicePixelRatio || 1;
 
-      // valToPos returns CSS pixel positions
-      const valToX = (ms: number) => u.valToPos(ms - t0Offset, 'x');
-      const valToY = (deg: number) => u.valToPos(deg, 'y');
+      // Draw hook runs against the raw canvas (device pixels), so request
+      // canvas-pixel positions and use bbox as-is.
+      const valToX = (ms: number) => u.valToPos(ms - t0Offset, 'x', true);
+      const valToY = (deg: number) => u.valToPos(deg, 'y', true);
 
-      const plotLeft = u.bbox.left / devicePixelRatio;
-      const plotTop = u.bbox.top / devicePixelRatio;
-      const plotWidth = u.bbox.width / devicePixelRatio;
-      const plotHeight = u.bbox.height / devicePixelRatio;
+      const plotLeft = u.bbox.left;
+      const plotTop = u.bbox.top;
+      const plotWidth = u.bbox.width;
+      const plotHeight = u.bbox.height;
 
       ctx.save();
 
@@ -319,25 +338,25 @@ export default function OscopeTriggerPlot() {
         const x = valToX(xMs);
         if (x < plotLeft || x > plotLeft + plotWidth) return;
         ctx.strokeStyle = color;
-        ctx.lineWidth = 2;
-        ctx.setLineDash([6, 4]);
+        ctx.lineWidth = 2 * dpr;
+        ctx.setLineDash([6 * dpr, 4 * dpr]);
         ctx.beginPath();
         ctx.moveTo(x, plotTop);
         ctx.lineTo(x, plotTop + plotHeight);
         ctx.stroke();
         ctx.setLineDash([]);
         ctx.fillStyle = color;
-        ctx.font = 'bold 11px monospace';
+        ctx.font = `bold ${11 * dpr}px monospace`;
         ctx.textAlign = 'center';
-        ctx.fillText(label, x, plotTop - 4);
+        ctx.fillText(label, x, plotTop - 4 * dpr);
       };
 
       const drawDottedHLine = (deg: number, color: string) => {
         const y = valToY(deg);
         if (y < plotTop || y > plotTop + plotHeight) return;
         ctx.strokeStyle = color;
-        ctx.lineWidth = 1;
-        ctx.setLineDash([3, 3]);
+        ctx.lineWidth = 1 * dpr;
+        ctx.setLineDash([3 * dpr, 3 * dpr]);
         ctx.globalAlpha = 0.5;
         ctx.beginPath();
         ctx.moveTo(plotLeft, y);
@@ -346,7 +365,7 @@ export default function OscopeTriggerPlot() {
         ctx.globalAlpha = 1.0;
       };
 
-      // Draw plateau lines
+      // Plateau lines
       if (r1) {
         drawDottedHLine(r1.prePlateau, ENC_COLORS[0]);
         drawDottedHLine(r1.postPlateau, ENC_COLORS[0]);
@@ -356,7 +375,7 @@ export default function OscopeTriggerPlot() {
         drawDottedHLine(r2.postPlateau, ENC_COLORS[1]);
       }
 
-      // Draw transition markers
+      // Transition markers
       if (r1 && r2) {
         const firstMs = Math.min(r1.timeMsRel, r2.timeMsRel);
         const secondMs = Math.max(r1.timeMsRel, r2.timeMsRel);
@@ -404,12 +423,14 @@ export default function OscopeTriggerPlot() {
           label: 'Encoder 1',
           stroke: ENC_COLORS[0],
           width: 2,
+          spanGaps: true,
           points: { show: true, size: 6, fill: ENC_COLORS[0] },
         },
         {
           label: 'Encoder 2',
           stroke: ENC_COLORS[1],
           width: 2,
+          spanGaps: true,
           points: { show: true, size: 6, fill: ENC_COLORS[1] },
         },
       ],

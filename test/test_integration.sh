@@ -22,6 +22,8 @@
 #   bash test/test_integration.sh --only=sensor_data
 #   bash test/test_integration.sh --only=sensor_data,cal_stability
 #   INTEGRATION_ONLY=sensor_data bash test/test_integration.sh
+#   INTEGRATION_RUN_PLAYWRIGHT_E2E=1 — after WS tests pass, start Next on :3000 and run Playwright
+#   Sensor Info E2E (requires diablo_server/frontend deps + `npx playwright install chromium`).
 #   # Numeric aliases match printed test numbers: 1=sensor_data, 11=sensor_config, …
 #   bash test/test_integration.sh --only=1
 # Full list of ids, dependencies (sequencer, controller, etc.), and direct tsx usage:
@@ -644,6 +646,50 @@ export INTEGRATION_SKIP_STARTUP_E2E
   --backend="$BACKEND" $SEQ_FLAG $CTRL_FLAG $VERBOSE_FLAG $ONLY_FLAG)
 WS_TEST_EXIT=$?
 
+# ── Optional: Playwright Sensor Info E2E (same stack, integration backend ports) ─
+PLAYWRIGHT_E2E_EXIT=0
+if [ "$WS_TEST_EXIT" -eq 0 ] && [ "${INTEGRATION_RUN_PLAYWRIGHT_E2E:-0}" = "1" ]; then
+  echo ""
+  echo "═══════════════════════════════════════════════════════════════"
+  echo "  Playwright Sensor Info E2E (INTEGRATION_RUN_PLAYWRIGHT_E2E=1)"
+  echo "═══════════════════════════════════════════════════════════════"
+  export NEXT_PUBLIC_API_URL="http://127.0.0.1:${TEST_BACKEND_WS_PORT}"
+  export NEXT_PUBLIC_WS_URL="ws://127.0.0.1:${TEST_BACKEND_WS_PORT}"
+  export PLAYWRIGHT_BASE_URL="${PLAYWRIGHT_BASE_URL:-http://127.0.0.1:3000}"
+  NEXT_E2E_LOG="$REPO_ROOT/.tmp/integration_next_e2e_$$.log"
+  (cd "$REPO_ROOT/diablo_server/frontend" && PORT=3000 npm run dev) >"$NEXT_E2E_LOG" 2>&1 &
+  NEXT_PID=$!
+  echo "  Next.js dev PID $NEXT_PID (log: $NEXT_E2E_LOG)"
+  echo -n "  Waiting for Next.js at ${PLAYWRIGHT_BASE_URL}/sensor-info..."
+  READY=0
+  for _ in $(seq 1 120); do
+    if curl -sf "${PLAYWRIGHT_BASE_URL}/sensor-info" >/dev/null 2>&1; then
+      READY=1
+      echo " ready"
+      break
+    fi
+    sleep 1
+    echo -n "."
+  done
+  if [ "$READY" != "1" ]; then
+    echo " TIMEOUT"
+    tail -50 "$NEXT_E2E_LOG" 2>/dev/null || true
+    kill "$NEXT_PID" 2>/dev/null || true
+    sleep 1
+    kill -9 "$NEXT_PID" 2>/dev/null || true
+    fuser -k 3000/tcp 2>/dev/null || true
+    PLAYWRIGHT_E2E_EXIT=1
+  else
+    if ! (cd "$REPO_ROOT/diablo_server/frontend" && PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" npx playwright test e2e); then
+      PLAYWRIGHT_E2E_EXIT=1
+    fi
+    kill "$NEXT_PID" 2>/dev/null || true
+    sleep 1
+    kill -9 "$NEXT_PID" 2>/dev/null || true
+    fuser -k 3000/tcp 2>/dev/null || true
+  fi
+fi
+
 # ── Stop simulator and flush stats ────────────────────────────────────────────
 # Send SIGTERM so the simulator writes its stats file before exiting.
 if [ -n "$SIM_PID" ] && kill -0 "$SIM_PID" 2>/dev/null; then
@@ -677,6 +723,7 @@ FINAL_EXIT=0
 UDP_CHECK_FAILED=${UDP_CHECK_FAILED:-0}
 [ "$WS_TEST_EXIT" -ne 0 ] && FINAL_EXIT=1
 [ "$UDP_CHECK_FAILED" -ne 0 ] && FINAL_EXIT=1
+[ "${PLAYWRIGHT_E2E_EXIT:-0}" -ne 0 ] && FINAL_EXIT=1
 
 echo ""
 echo "═══════════════════════════════════════════════════════════════"
@@ -686,6 +733,7 @@ else
   echo "  ❌ INTEGRATION TEST FAILED"
   [ "$WS_TEST_EXIT" -ne 0 ] && echo "     WS test failed (exit code: $WS_TEST_EXIT)"
   [ "$UDP_CHECK_FAILED" -ne 0 ] && echo "     UDP test failed (0 or dropped packets)"
+  [ "${PLAYWRIGHT_E2E_EXIT:-0}" -ne 0 ] && echo "     Playwright Sensor Info E2E failed (exit code: $PLAYWRIGHT_E2E_EXIT)"
 fi
 echo "═══════════════════════════════════════════════════════════════"
 echo ""

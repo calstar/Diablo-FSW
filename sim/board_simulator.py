@@ -79,8 +79,13 @@ class SimulatedBoard:
         )
 
         # State machine (matches SensorHotfireCore.h lifecycle)
+        self.skip_startup = skip_startup
         self.board_state = BOARD_STATE_ACTIVE if skip_startup else BOARD_STATE_SETUP
         self.can_receive = False  # whether socket is bound to listen_port
+        # With --skip-startup we never bind listen_port (no SENSOR_CONFIG) so the normal
+        # SETUP→SELF_TEST→ACTIVE path never runs — self-test UDP is never sent unless we
+        # emit it once here (GUI + Playwright expect SELF_TEST.BOARD_* in sensorData).
+        self._skip_startup_self_test_sent = False
 
         self.running = False
         self.sock = None
@@ -136,6 +141,7 @@ class SimulatedBoard:
         self.thread.start()
 
     def _run(self):
+        run_started = time.time()
         last_heartbeat = 0
         last_sensor_data = 0
 
@@ -151,6 +157,20 @@ class SimulatedBoard:
             if self.board_state == BOARD_STATE_SETUP:
                 if self.can_receive:
                     self._check_for_sensor_config()
+
+            # --- skip-startup: no CONFIG, so emit one SELF_TEST pass burst (DAQ→Elodin→thin→WS) ---
+            if (
+                self.skip_startup
+                and self.board_state == BOARD_STATE_ACTIVE
+                and not self._skip_startup_self_test_sent
+                and now - run_started >= 2.0
+            ):
+                self._send_self_test()
+                self._skip_startup_self_test_sent = True
+                print(
+                    f"[{self.name}] skip-startup: one-shot SELF_TEST sent (pass all active connectors)",
+                    flush=True,
+                )
 
             # --- Send Heartbeat (all states, matching firmware) ---
             if now - last_heartbeat >= heartbeat_interval:

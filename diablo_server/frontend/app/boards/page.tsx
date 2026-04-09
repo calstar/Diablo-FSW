@@ -157,6 +157,8 @@ export default function BoardsPage() {
                     return (
                       <div
                         key={b.id}
+                        data-testid="boards-heartbeat-card"
+                        data-board-id={b.id}
                         className={`rounded-xl border-l-4 p-6 border border-gray-700 transition-colors min-h-[200px] flex flex-col bg-card hover:border-gray-600 ${accent}`}
                       >
                         <div className="flex items-center justify-between mb-4">

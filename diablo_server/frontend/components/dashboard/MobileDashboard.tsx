@@ -1,8 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSensorStore, useSensorValue } from '@/lib/store';
-import { getApiBaseUrl, getWebSocketClient } from '@/lib/websocket';
+import { getWebSocketClient } from '@/lib/websocket';
 import { SystemState, CommandPayload } from '@/lib/types';
 import { startDataCache } from '@/lib/data-cache';
 import StateMachineDiagram from '@/components/controls/StateMachineDiagram';
@@ -11,6 +11,7 @@ import TimeSeriesPlot from '@/components/plots/TimeSeriesPlot';
 import { useControlMode } from '@/lib/control-mode';
 import { useSensorConfig } from '@/lib/sensor-config';
 import { buildPressureBarDefsFromSensorConfig, buildPressurePlotSeriesFromSensorList } from '@/lib/pressure-bar-defs';
+import { useActuatorsFromConfig } from '@/lib/dashboard-hooks';
 
 // ── Constants shared with TopBar/UnifiedDashboard ────────────────────────────
 
@@ -75,13 +76,11 @@ export default function MobileDashboard() {
 
   const [clock, setClock] = useState('');
   const [timeWindow, setTimeWindow] = useState(60);
-  const [actuatorsFromConfig, setActuatorsFromConfig] = useState<
-    { name: string; channel: number; entity: string; boardId?: number }[]
-  >([]);
 
   const ws = getWebSocketClient();
   const { controlEnabled } = useControlMode();
   const sensors = useSensorConfig();
+  const actuatorsFromConfig = useActuatorsFromConfig();
 
   useEffect(() => {
     try { startDataCache(); } catch { /* already started */ }
@@ -93,25 +92,6 @@ export default function MobileDashboard() {
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, []);
-
-  // ── Config fetch ─────────────────────────────────────────────────────────
-  useEffect(() => {
-    fetch(`${getApiBaseUrl()}/api/config`)
-      .then((r) => r.ok ? r.json() : null)
-      .then((data: { config?: { actuator_roles?: Record<string, [string, number] | [string, number, string]> } } | null) => {
-        const roles = data?.config?.actuator_roles;
-        if (!roles || typeof roles !== 'object') return;
-        setActuatorsFromConfig(
-          Object.entries(roles).map(([name, value]) => {
-            const channel = Array.isArray(value) && value.length >= 2 && typeof value[1] === 'number' ? value[1] : 1;
-            const boardId = Array.isArray(value) && value.length >= 3 && typeof value[2] === 'number' ? value[2] : undefined;
-            const entity = `ACT.${name.replace(/\s+/g, '_')}`;
-            return { name, channel, entity, boardId };
-          })
-        );
-      })
-      .catch(() => {});
   }, []);
 
   // ── Derived state ─────────────────────────────────────────────────────────

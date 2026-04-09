@@ -149,7 +149,12 @@ bool SequencerService::init(const std::string& config_path) {
             v.erase(v.find_last_not_of(" \t\r\n") + 1);
             try {
                 return static_cast<uint32_t>(std::stoul(v));
+            } catch (const std::exception& e) {
+                std::cerr << "[SequencerService] config parse error for key '" << key
+                          << "': " << e.what() << std::endl;
             } catch (...) {
+                std::cerr << "[SequencerService] config parse error for key '" << key
+                          << "': unknown error" << std::endl;
             }
         }
         return def;
@@ -188,7 +193,12 @@ bool SequencerService::init(const std::string& config_path) {
             else if (k == "port") {
                 try {
                     ctrl_port = static_cast<uint16_t>(std::stoi(v));
+                } catch (const std::exception& e) {
+                    std::cerr << "[SequencerService] failed to parse controller port '"
+                              << v << "': " << e.what() << std::endl;
                 } catch (...) {
+                    std::cerr << "[SequencerService] failed to parse controller port '"
+                              << v << "': unknown error" << std::endl;
                 }
             }
         }
@@ -222,7 +232,12 @@ bool SequencerService::init(const std::string& config_path) {
             v.erase(v.find_last_not_of(" \t\r\n") + 1);
             try {
                 elodin_port = static_cast<uint16_t>(std::stoi(v));
+            } catch (const std::exception& e) {
+                std::cerr << "[SequencerService] failed to parse elodin port '"
+                          << v << "': " << e.what() << std::endl;
             } catch (...) {
+                std::cerr << "[SequencerService] failed to parse elodin port '"
+                          << v << "': unknown error" << std::endl;
             }
         }
     }

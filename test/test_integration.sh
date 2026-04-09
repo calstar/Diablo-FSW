@@ -114,16 +114,16 @@ kill_stale_integration_processes() {
 cleanup() {
   echo ""
   echo "🧹 Cleaning up..."
-  # First kill tracked PIDs (graceful, then force)
+  # Graceful shutdown: SIGTERM first, then wait up to 5s, then SIGKILL stragglers
   for pid in "${PIDS[@]}"; do
-    kill "$pid" 2>/dev/null || true
+    kill -TERM "$pid" 2>/dev/null || true
   done
-  sleep 1
   for pid in "${PIDS[@]}"; do
-    kill -9 "$pid" 2>/dev/null || true
-  done
-  # Reap children so bash does not print "line N: PID Killed (command...)" on exit.
-  for pid in "${PIDS[@]}"; do
+    for i in $(seq 1 10); do
+      kill -0 "$pid" 2>/dev/null || break
+      sleep 0.5
+    done
+    kill -KILL "$pid" 2>/dev/null || true
     wait "$pid" 2>/dev/null || true
   done
   # Then sweep for anything that escaped PID tracking (e.g. child processes)

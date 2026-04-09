@@ -30,6 +30,7 @@ export function getConfigPath(): string {
       readFileSync(path, 'utf-8');
       return path;
     } catch {
+      console.debug(`[config] not found at: ${path}`);
       continue;
     }
   }
@@ -42,6 +43,7 @@ let _actuatorRolesParseWarned = false;
 export function readConfig(): any {
   try {
     const path = getConfigPath();
+    console.info(`[config] loaded from: ${path}`);
     const content = readFileSync(path, 'utf-8');
 
     // Try to parse normally first

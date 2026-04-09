@@ -797,11 +797,17 @@ function handleCommand(ws: WebSocket, command: CommandPayload): void {
           debugMode = newDebug;
           broadcastStateUpdate();
         }
-      }).catch(() => { });
+      }).catch((err: Error) => {
+        console.error('[server] failed to reach actuator service for debug_mode:', err);
+        send(ws, { type: MessageType.ERROR, timestamp: Date.now(), payload: { message: 'Actuator service unreachable' } });
+      });
       break;
     }
     case 'extend_fire':
-      sendToActuatorService('EXTEND_FIRE\n').catch(() => { });
+      sendToActuatorService('EXTEND_FIRE\n').catch((err: Error) => {
+        console.error('[server] failed to reach actuator service for extend_fire:', err);
+        send(ws, { type: MessageType.ERROR, timestamp: Date.now(), payload: { message: 'Actuator service unreachable' } });
+      });
       break;
     case 'set_countdown_target':
       countdownTargetMs = command.data.targetTimeMs ?? null;
@@ -1002,9 +1008,13 @@ elodin.on('packet', (header: any, payload: Buffer) => {
       broadcastCommandedActuatorsForState(currentState);
       scheduleActuatorMismatchCheck(currentState);
       if (currentState === SystemState.FIRE && prevState !== SystemState.FIRE) {
-        sendToControllerService('FIRE_START\n').catch(() => { /* non-fatal */ });
+        sendToControllerService('FIRE_START\n').catch((err: Error) => {
+          console.error('[server] failed to reach controller service for FIRE_START:', err);
+        });
       } else if (prevState === SystemState.FIRE && currentState !== SystemState.FIRE) {
-        sendToControllerService('FIRE_STOP\n').catch(() => { /* non-fatal */ });
+        sendToControllerService('FIRE_STOP\n').catch((err: Error) => {
+          console.error('[server] failed to reach controller service for FIRE_STOP:', err);
+        });
       }
       return;
     }

@@ -55,7 +55,6 @@ class SimulatedBoard:
         self.board_id = board_config.get("board_id", 0)
         self.board_type_str = board_config.get("type", "PT")
         self.num_sensors = board_config.get("num_sensors", 10)
-        self.channel_offset = board_config.get("channel_offset", 0)
         self.listen_port = board_config.get("listen_port", 5005)
 
         # Map string type to enum
@@ -287,11 +286,8 @@ class SimulatedBoard:
             return int(ADC_MAX * 1.8 / 2.5)
 
         if self.board_type == BOARD_TYPE_PT:
-            # Global channel for pt_board_2 (connector 1 → ch11, etc.)
-            global_ch = sensor_id + self.channel_offset
-            target_psi = self.sim_pt_targets.get(global_ch) or self.sim_pt_targets.get(
-                sensor_id
-            )
+            # Local connector id (1–10) — matches Elodin packet channel / daq_bridge
+            target_psi = self.sim_pt_targets.get(sensor_id)
 
             if sensor_id in self.hp_pt_connectors:
                 # HP PT (4-20 mA): psi = (i-4)/16 * full_scale. adc ∝ i.

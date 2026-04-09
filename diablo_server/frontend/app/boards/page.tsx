@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useSensorStore } from '@/lib/store';
+import { useSensorStore, useStaleRenderTick } from '@/lib/store';
+import { isBoardLiveTelemetryStale } from '@/lib/sensor-rate';
 import { getApiBaseUrl, getWebSocketClient } from '@/lib/websocket';
 import { MessageType, BoardStatusPayload, BoardStatus, engineStateCodeToLabel } from '@/lib/types';
 
@@ -27,6 +28,8 @@ export default function BoardsPage() {
   const boardsMap = useSensorStore((s) => s.boards as Record<number, BoardStatus>);
   const sensorData = useSensorStore((s) => s.sensorData);
   const ws = getWebSocketClient();
+  /** Re-check BOARD_LIVE_TELEMETRY_STALE_MS vs lastHeartbeatMs on the same ~250ms cadence as sensor readouts. */
+  useStaleRenderTick();
 
   const [expectedCountById, setExpectedCountById] = useState<Record<number, number>>({});
 
@@ -130,6 +133,7 @@ export default function BoardsPage() {
                 </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                   {boards.map((b, index) => {
+                    const stale = isBoardLiveTelemetryStale(b);
                     const testKeys = Object.keys(sensorData).filter((k) => k.startsWith(`SELF_TEST.BOARD_${b.id}.`));
                     let testStatus: 'Untested' | 'Passed' | 'Failed' | 'Pending' = 'Untested';
                     if (testKeys.length > 0) {
@@ -141,7 +145,7 @@ export default function BoardsPage() {
                     }
                     const accent = CARD_ACCENTS[index % CARD_ACCENTS.length];
                     const freq =
-                      b.frequencyHz != null && isFinite(b.frequencyHz)
+                      !stale && b.frequencyHz != null && isFinite(b.frequencyHz)
                         ? `${b.frequencyHz.toFixed(1)} Hz`
                         : '---';
                     let boardStateLabel = 'Unknown';
@@ -149,7 +153,9 @@ export default function BoardsPage() {
                     else if (b.boardState === 2) boardStateLabel = 'Active';
                     else if (b.boardState === 3) boardStateLabel = 'Abort';
                     else if (b.boardState === 4) boardStateLabel = 'Abort done';
-                    const engineLabel = engineStateCodeToLabel(b.engineState);
+                    if (stale) boardStateLabel = '---';
+                    const engineLabel = stale ? '---' : engineStateCodeToLabel(b.engineState);
+                    const liveConnected = !stale && (b.operational ?? b.connected);
                     const nameParts = [];
                     if (b.type) nameParts.push(b.type);
                     if (b.boardNumber != null) nameParts.push(`Board ${b.boardNumber}`);
@@ -169,12 +175,12 @@ export default function BoardsPage() {
                         <div className="flex flex-wrap gap-4 mb-3 text-lg">
                           <div className="flex-1 min-w-0">
                             <div className="text-text-muted mb-1.5 text-sm uppercase tracking-wider">Status</div>
-                            <div className={`flex items-center gap-2.5 ${!(b.operational ?? b.connected) ? 'text-red-400' : 'text-green-400'}`}>
+                            <div className={`flex items-center gap-2.5 ${!liveConnected ? 'text-red-400' : 'text-green-400'}`}>
                               <div
-                                className={`w-3.5 h-3.5 rounded-full flex-shrink-0 ${!(b.operational ?? b.connected) ? 'bg-red-500' : 'bg-green-500'}`}
+                                className={`w-3.5 h-3.5 rounded-full flex-shrink-0 ${!liveConnected ? 'bg-red-500' : 'bg-green-500'}`}
                               />
                               <span className="font-mono font-bold text-lg truncate">
-                                {(b.operational ?? b.connected) ? 'CONNECTED' : 'DISCONNECTED'}
+                                {stale ? '---' : (b.operational ?? b.connected) ? 'CONNECTED' : 'DISCONNECTED'}
                               </span>
                             </div>
                           </div>
@@ -182,13 +188,13 @@ export default function BoardsPage() {
                             <div className="text-text-muted mb-1.5 text-sm uppercase tracking-wider">State</div>
                             <div className="flex items-center gap-2.5 text-text">
                               <div
-                                className={`w-3.5 h-3.5 rounded-full flex-shrink-0 ${boardStateLabel === 'Active' ? 'bg-green-500' :
+                                className={`w-3.5 h-3.5 rounded-full flex-shrink-0 ${stale ? 'bg-gray-500' : boardStateLabel === 'Active' ? 'bg-green-500' :
                                   boardStateLabel === 'Setup' ? 'bg-blue-500' :
                                     boardStateLabel === 'Abort' || boardStateLabel === 'Abort done' ? 'bg-red-500' : 'bg-gray-500'
                                   }`}
                               />
                               <span className="font-mono font-bold text-lg truncate">
-                                {boardStateLabel.toUpperCase()}
+                                {stale ? '---' : boardStateLabel.toUpperCase()}
                               </span>
                             </div>
                           </div>

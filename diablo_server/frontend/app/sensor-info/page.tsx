@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react';
-import { useSensorStore, useSensorValue } from '@/lib/store';
+import { useSensorStore, useSensorValue, useStaleRenderTick } from '@/lib/store';
+import { BOARD_LIVE_TELEMETRY_STALE_MS } from '@/lib/sensor-rate';
 import { getWebSocketClient, getApiBaseUrl } from '@/lib/websocket';
 import { MessageType, SensorUpdate, StateUpdate } from '@/lib/types';
 import { getAliasedSensorRate, useAliasedSensorRate } from '@/lib/aliased-sensor-rate';
@@ -131,9 +132,10 @@ function SensorTable({
 // ── PT row ───────────────────────────────────────────────────────────────────
 
 function PtRow({ sensor }: { sensor: PtSensor }) {
-  const adc     = useSensorValue(sensor.rawEntity, 'raw_adc_counts');
+  // ADC code read from cal entity — calibration_service always publishes raw u32 alongside converted value.
+  const adc     = useSensorValue(sensor.calEntity, 'raw_adc_counts');
   const psi     = useSensorValue(sensor.calEntity, 'pressure_psi');
-  const rateAdc = useAliasedSensorRate(sensor.rawEntity, 'raw_adc_counts');
+  const rateAdc = useAliasedSensorRate(sensor.calEntity, 'raw_adc_counts');
   const ratePsi = useAliasedSensorRate(sensor.calEntity, 'pressure_psi');
   const rate    = Math.max(rateAdc, ratePsi);
 
@@ -164,9 +166,9 @@ function PtRow({ sensor }: { sensor: PtSensor }) {
 // ── HPT row ──────────────────────────────────────────────────────────────────
 
 function HptRow({ sensor }: { sensor: PtSensor }) {
-  const adc      = useSensorValue(sensor.rawEntity, 'raw_adc_counts');
+  const adc      = useSensorValue(sensor.calEntity, 'raw_adc_counts');
   const psi      = useSensorValue(sensor.calEntity, 'pressure_psi');
-  const rateAdc  = useAliasedSensorRate(sensor.rawEntity, 'raw_adc_counts');
+  const rateAdc  = useAliasedSensorRate(sensor.calEntity, 'raw_adc_counts');
   const ratePsi  = useAliasedSensorRate(sensor.calEntity, 'pressure_psi');
   const rate     = Math.max(rateAdc, ratePsi);
 
@@ -196,12 +198,12 @@ function HptRow({ sensor }: { sensor: PtSensor }) {
 
 // ── TC row ───────────────────────────────────────────────────────────────────
 
-function TcRow({ entity, calEntity, label, color }: { entity: string; calEntity: string; label: string; color: string; voltageReference: number }) {
-  const raw  = useSensorValue(entity, 'raw_adc_counts');
+function TcRow({ entity: _entity, calEntity, label, color }: { entity: string; calEntity: string; label: string; color: string; voltageReference: number }) {
+  const adc  = useSensorValue(calEntity, 'raw_adc_counts');
   const tempC = useSensorValue(calEntity, 'temperature_c');
-  const rateRaw = useAliasedSensorRate(entity, 'raw_adc_counts');
+  const rateAdc = useAliasedSensorRate(calEntity, 'raw_adc_counts');
   const rateCal = useAliasedSensorRate(calEntity, 'temperature_c');
-  const rate = Math.max(rateRaw, rateCal);
+  const rate = Math.max(rateAdc, rateCal);
 
   return (
     <tr className="border-b border-gray-800/40 hover:bg-gray-900/30 transition-colors">
@@ -211,7 +213,7 @@ function TcRow({ entity, calEntity, label, color }: { entity: string; calEntity:
           <span className="text-gray-200 font-sans font-medium text-xs">{label}</span>
         </div>
       </td>
-      <td className="px-4 py-2 tabular-nums text-purple-300">{fmtAdc(raw)}</td>
+      <td className="px-4 py-2 tabular-nums text-purple-300">{fmtAdc(adc)}</td>
       <td className="px-4 py-2 tabular-nums text-amber-400">
         {fmtTemp(tempC)} <span className="text-gray-600 text-xs">°C</span>
       </td>
@@ -222,12 +224,13 @@ function TcRow({ entity, calEntity, label, color }: { entity: string; calEntity:
 
 // ── RTD row ──────────────────────────────────────────────────────────────────
 
-function RtdRow({ entity, calEntity, label, color }: { entity: string; calEntity: string; label: string; color: string }) {
-  const rawRes  = useSensorValue(entity, 'raw_resistance_counts');
+function RtdRow({ entity: _entity, calEntity, label, color }: { entity: string; calEntity: string; label: string; color: string }) {
+  // Cal packet carries raw ADC u32 at offset 16 (same field as all other types) — use raw_adc_counts on cal entity.
+  const adc     = useSensorValue(calEntity, 'raw_adc_counts');
   const tempC   = useSensorValue(calEntity, 'temperature_c');
-  const rateRaw = useAliasedSensorRate(entity, 'raw_resistance_counts');
+  const rateAdc = useAliasedSensorRate(calEntity, 'raw_adc_counts');
   const rateCal = useAliasedSensorRate(calEntity, 'temperature_c');
-  const rate    = Math.max(rateRaw, rateCal);
+  const rate    = Math.max(rateAdc, rateCal);
 
   return (
     <tr className="border-b border-gray-800/40 hover:bg-gray-900/30 transition-colors">
@@ -238,7 +241,7 @@ function RtdRow({ entity, calEntity, label, color }: { entity: string; calEntity
         </div>
       </td>
       <td className="px-4 py-2 tabular-nums text-purple-300">
-        {fmtAdc(rawRes)}
+        {fmtAdc(adc)}
       </td>
       <td className="px-4 py-2 tabular-nums text-green-400">
         {fmtTemp(tempC)} <span className="text-gray-600 text-xs">°C</span>
@@ -250,12 +253,12 @@ function RtdRow({ entity, calEntity, label, color }: { entity: string; calEntity
 
 // ── LC row ───────────────────────────────────────────────────────────────────
 
-function LcRow({ entity, calEntity, label, color }: { entity: string; calEntity: string; label: string; color: string }) {
-  const raw  = useSensorValue(entity, 'raw_adc_counts');
+function LcRow({ entity: _entity, calEntity, label, color }: { entity: string; calEntity: string; label: string; color: string }) {
+  const adc  = useSensorValue(calEntity, 'raw_adc_counts');
   const forceKg = useSensorValue(calEntity, 'force_kg');
-  const rateRaw = useAliasedSensorRate(entity, 'raw_adc_counts');
+  const rateAdc = useAliasedSensorRate(calEntity, 'raw_adc_counts');
   const rateCal = useAliasedSensorRate(calEntity, 'force_kg');
-  const rate = Math.max(rateRaw, rateCal);
+  const rate = Math.max(rateAdc, rateCal);
 
   return (
     <tr className="border-b border-gray-800/40 hover:bg-gray-900/30 transition-colors">
@@ -265,7 +268,7 @@ function LcRow({ entity, calEntity, label, color }: { entity: string; calEntity:
           <span className="text-gray-200 font-sans font-medium text-xs">{label}</span>
         </div>
       </td>
-      <td className="px-4 py-2 tabular-nums text-purple-300">{fmtAdc(raw)}</td>
+      <td className="px-4 py-2 tabular-nums text-purple-300">{fmtAdc(adc)}</td>
       <td className="px-4 py-2 tabular-nums text-orange-400">
         {fmtForce(forceKg)} <span className="text-gray-600 text-xs">kg</span>
       </td>
@@ -276,12 +279,12 @@ function LcRow({ entity, calEntity, label, color }: { entity: string; calEntity:
 
 // ── ACT row ──────────────────────────────────────────────────────────────
 
-function ActRow({ entity, calEntity, label, color }: { entity: string; calEntity: string; label: string; color: string }) {
-  const raw  = useSensorValue(entity, 'raw_adc_counts');
+function ActRow({ entity: _entity, calEntity, label, color }: { entity: string; calEntity: string; label: string; color: string }) {
+  const adc  = useSensorValue(calEntity, 'raw_adc_counts');
   const currentA = useSensorValue(calEntity, 'current_a');
-  const rateRaw = useAliasedSensorRate(entity, 'raw_adc_counts');
+  const rateAdc = useAliasedSensorRate(calEntity, 'raw_adc_counts');
   const rateCal = useAliasedSensorRate(calEntity, 'current_a');
-  const rate = Math.max(rateRaw, rateCal);
+  const rate = Math.max(rateAdc, rateCal);
 
   return (
     <tr className="border-b border-gray-800/40 hover:bg-gray-900/30 transition-colors">
@@ -291,7 +294,7 @@ function ActRow({ entity, calEntity, label, color }: { entity: string; calEntity
           <span className="text-gray-200 font-sans font-medium text-xs">{label}</span>
         </div>
       </td>
-      <td className="px-4 py-2 tabular-nums text-purple-300">{fmtAdc(raw)}</td>
+      <td className="px-4 py-2 tabular-nums text-purple-300">{fmtAdc(adc)}</td>
       <td className="px-4 py-2 tabular-nums text-yellow-400">
         {fmtCurrent(currentA)} <span className="text-gray-600 text-xs">A</span>
       </td>
@@ -342,6 +345,9 @@ export default function SensorInfoPage() {
   const [boardScanHz, setBoardScanHz] = useState({
     pt1: 0, pt2: 0, tc: 0, rtd: 0, lc: 0, act: 0, enc: 0,
   });
+  /** Wall time of last successful `/api/debug` response (ingest + board scan metrics). */
+  const [lastDebugPollOkMs, setLastDebugPollOkMs] = useState<number | null>(null);
+  useStaleRenderTick();
 
   useEffect(() => {
     let prevCount: number | null = null;
@@ -377,6 +383,7 @@ export default function SensorInfoPage() {
               enc: typeof b.enc === 'number' ? b.enc : 0,
             });
           }
+          setLastDebugPollOkMs(now);
         })
         .catch(() => {
           // leave last values on error
@@ -399,7 +406,9 @@ export default function SensorInfoPage() {
   const [tcData, setTcData] = useState<TcRowConfig[]>(SENSOR_INFO_DEFAULT_TC_DATA);
   const [rtdData, setRtdData] = useState<RtdLcRowConfig[]>(SENSOR_INFO_DEFAULT_RTD_DATA);
   const [lcData, setLcData] = useState<RtdLcRowConfig[]>(SENSOR_INFO_DEFAULT_LC_DATA);
-  const [actData, setActData] = useState<{ entity: string; calEntity: string; label: string }[]>(SENSOR_INFO_DEFAULT_ACT_DATA);
+  const [actData, setActData] = useState<
+    { entity: string; calEntity: string; label: string; boardId: number; localCh: number }[]
+  >(SENSOR_INFO_DEFAULT_ACT_DATA);
   const [encData, setEncData] = useState<EncoderRowConfig[]>(SENSOR_INFO_DEFAULT_ENCODER_DATA);
 
   const loadChannelConfig = useCallback(() => {
@@ -483,6 +492,9 @@ export default function SensorInfoPage() {
     return () => { unsub(); };
   }, [ws, loadChannelConfig, loadPtSensors]);
 
+  const ingestMetricsStale =
+    lastDebugPollOkMs != null && Date.now() - lastDebugPollOkMs >= BOARD_LIVE_TELEMETRY_STALE_MS;
+
   return (
     <main className="h-full bg-background text-text overflow-auto">
       <div className="p-4 flex flex-col gap-4 max-w-7xl mx-auto">
@@ -499,13 +511,13 @@ export default function SensorInfoPage() {
               <div>
                 <span className="text-gray-500 mr-1">Packets:</span>
                 <span className="text-cyan-400" data-testid="sensor-info-packets-count">
-                  {relayPackets != null ? relayPackets.toLocaleString() : '---'}
+                  {ingestMetricsStale ? '---' : relayPackets != null ? relayPackets.toLocaleString() : '---'}
                 </span>
               </div>
               <div>
                 <span className="text-gray-500 mr-1">Ingest Rate:</span>
                 <span className="text-cyan-400" data-testid="sensor-info-ingest-rate-hz">
-                  {fmtHz(relayRateHz)} Hz
+                  {ingestMetricsStale ? '---' : `${fmtHz(relayRateHz)} Hz`}
                 </span>
               </div>
             </div>
@@ -524,31 +536,31 @@ export default function SensorInfoPage() {
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7 gap-x-4 gap-y-1" data-testid="sensor-info-board-scan">
               <div>
                 <div className="text-[10px] text-gray-500">PT B21 (PT1.*)</div>
-                <div className="text-cyan-400">{fmtHz(boardScanHz.pt1)} Hz</div>
+                <div className="text-cyan-400">{ingestMetricsStale ? '---' : `${fmtHz(boardScanHz.pt1)} Hz`}</div>
               </div>
               <div>
                 <div className="text-[10px] text-gray-500">HPT B22 (PT2.*)</div>
-                <div className="text-cyan-400">{fmtHz(boardScanHz.pt2)} Hz</div>
+                <div className="text-cyan-400">{ingestMetricsStale ? '---' : `${fmtHz(boardScanHz.pt2)} Hz`}</div>
               </div>
               <div>
                 <div className="text-[10px] text-gray-500">TC B51 (TC*)</div>
-                <div className="text-cyan-400">{fmtHz(boardScanHz.tc)} Hz</div>
+                <div className="text-cyan-400">{ingestMetricsStale ? '---' : `${fmtHz(boardScanHz.tc)} Hz`}</div>
               </div>
               <div>
                 <div className="text-[10px] text-gray-500">RTD B31 (RTD*)</div>
-                <div className="text-cyan-400">{fmtHz(boardScanHz.rtd)} Hz</div>
+                <div className="text-cyan-400">{ingestMetricsStale ? '---' : `${fmtHz(boardScanHz.rtd)} Hz`}</div>
               </div>
               <div>
                 <div className="text-[10px] text-gray-500">LC B41 (LC*)</div>
-                <div className="text-cyan-400">{fmtHz(boardScanHz.lc)} Hz</div>
+                <div className="text-cyan-400">{ingestMetricsStale ? '---' : `${fmtHz(boardScanHz.lc)} Hz`}</div>
               </div>
               <div>
                 <div className="text-[10px] text-gray-500">ENC B61 (ENC*)</div>
-                <div className="text-cyan-400">{fmtHz(boardScanHz.enc)} Hz</div>
+                <div className="text-cyan-400">{ingestMetricsStale ? '---' : `${fmtHz(boardScanHz.enc)} Hz`}</div>
               </div>
               <div>
                 <div className="text-[10px] text-gray-500">ACT B12/14 (ACT*)</div>
-                <div className="text-cyan-400">{fmtHz(boardScanHz.act)} Hz</div>
+                <div className="text-cyan-400">{ingestMetricsStale ? '---' : `${fmtHz(boardScanHz.act)} Hz`}</div>
               </div>
             </div>
           </div>
@@ -651,7 +663,7 @@ export default function SensorInfoPage() {
         >
           {actData.map((d, i) => (
             <ActRow
-              key={d.entity}
+              key={`${d.boardId}-${d.localCh}`}
               entity={d.entity}
               calEntity={d.calEntity}
               label={d.label}

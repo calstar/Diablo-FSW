@@ -199,12 +199,10 @@ fi
 
 # Board simulator (pane 0); set USE_SIM=1 to run (default off for real hardware)
 # Waits for the backend WS port so the Elodin→backend pipeline is up before traffic.
-# --skip-startup matches test/test_integration.sh: ACTIVE immediately (no SETUP wait for
-# SENSOR_CONFIG). Boards that bind to 127.0.0.* fallback never receive CONFIG to 192.168.2.*
-# and stayed in SETUP — encoder sent no 0x24 data → board-scan ENC stayed "--- Hz".
+# Full firmware lifecycle: SETUP → SENSOR_CONFIG → SELF_TEST → ACTIVE (no --skip-startup).
 if [ "${USE_SIM:-0}" = "1" ]; then
   CMD_LOG_SIM="/tmp/gui_logs/sim.log"
-  CMD_SIM='printf "\n  ══ BOARD SIMULATOR — UDP → :5006 (All Boards) ══\n\n" && '"$WAIT_FOR_BACKEND"' && cd '"$PROJECT"' && exec '"$PYTHON_BIN"' sim/board_simulator.py --config '"$CONFIG_FILE"' --target 127.0.0.1 --port 5006 --skip-startup 2>&1 | tee '"$CMD_LOG_SIM"
+  CMD_SIM='printf "\n  ══ BOARD SIMULATOR — UDP → :5006 (All Boards) ══\n\n" && '"$WAIT_FOR_BACKEND"' && cd '"$PROJECT"' && exec '"$PYTHON_BIN"' sim/board_simulator.py --config '"$CONFIG_FILE"' --target 127.0.0.1 --port 5006 2>&1 | tee '"$CMD_LOG_SIM"
 else
   CMD_SIM='printf "\n  ══ BOARD SIMULATOR — DISABLED (USE_SIM=1 to enable) ══\n\n" && sleep infinity'
 fi
@@ -308,7 +306,7 @@ launch_background() {
   nohup bash -c "cd '$PROJECT/diablo_server/frontend' && NEXT_PUBLIC_API_URL=http://127.0.0.1:${THIN_WS_PORT} NEXT_PUBLIC_WS_URL=ws://127.0.0.1:${THIN_WS_PORT} exec npm run dev" >> "$LOGDIR/frontend.log" 2>&1 &
   echo "    Frontend:     PID $! → $LOGDIR/frontend.log"
 
-  # Simulator LAST (if USE_SIM=1) — wait for backend; --skip-startup matches tmux CMD_SIM
+  # Simulator LAST (if USE_SIM=1) — wait for backend; same args as tmux CMD_SIM (full startup)
   if [ "${USE_SIM:-0}" = "1" ]; then
     echo -n "    Waiting for backend WS (port ${THIN_WS_PORT})..."
     for i in $(seq 1 40); do
@@ -317,7 +315,7 @@ launch_background() {
       echo -n "."
     done
     echo " ready"
-    nohup bash -c "cd '$PROJECT' && exec '$PYTHON_BIN' sim/board_simulator.py --config '$CONFIG_FILE' --skip-startup" >> "$LOGDIR/sim.log" 2>&1 &
+    nohup bash -c "cd '$PROJECT' && exec '$PYTHON_BIN' sim/board_simulator.py --config '$CONFIG_FILE' --target 127.0.0.1 --port 5006" >> "$LOGDIR/sim.log" 2>&1 &
     echo "    Simulator:    PID $! → $LOGDIR/sim.log"
   fi
 

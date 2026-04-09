@@ -87,7 +87,7 @@ function parseOnlyTests(): Set<string> | null {
   }
   const allowed = new Set([
     'sensor_config', 'sensor_data', 'cal_stability', 'raw_cal_presence',
-    'heartbeat', 'board_status', 'selftest',
+    'heartbeat', 'board_status', 'selftest', 'backend_debug_api',
     'state_transition', 'state_debug', 'actuator_ws', 'actuator_udp', 'elodin_sync',
     'controller',
   ]);
@@ -505,11 +505,69 @@ const EXPECTED_ENTITIES: string[] = [
   'ACT4.CH6', 'ACT4.CH7', 'ACT4.CH8', 'ACT4.CH9', 'ACT4.CH10',
 ];
 
+// ── GET /api/debug · backend rate-card contract ────────────────────────────
+// Asserts the Sensor Info page header cards will show non-zero values.
+// sensor-info/page.tsx polls GET /api/debug every 1s for relayPacketsReceived
+// and boardScanRateHz.{pt1,pt2,tc,rtd,lc,act,enc}. If this check fails the
+// "Backend Ingest" and "Board ingest scan rate" cards will show "---".
+
+async function testBackendDebugApi(): Promise<void> {
+  console.log('\n📊 Test: Backend /api/debug (Sensor Info header cards)');
+
+  interface DebugApiResponse {
+    relayPacketsReceived?: number;
+    boardScanRateHz?: Record<string, number>;
+    relayConnected?: boolean;
+  }
+
+  const result = await new Promise<DebugApiResponse | null>((resolve) => {
+    const req = http.get(`http://127.0.0.1:${WS_PORT}/api/debug`, (res) => {
+      let data = '';
+      res.on('data', (c) => { data += c; });
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)); } catch { resolve(null); }
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.setTimeout(3000, () => { req.destroy(); resolve(null); });
+  });
+
+  assert(result !== null, '/api/debug endpoint responds with JSON');
+  if (!result) return;
+
+  assert(
+    typeof result.relayPacketsReceived === 'number' && result.relayPacketsReceived > 0,
+    `relayPacketsReceived > 0 (got ${result.relayPacketsReceived ?? 'missing'}) — "Ingest Rate" card would show "---"`,
+  );
+
+  const bsr = result.boardScanRateHz;
+  assert(bsr !== null && typeof bsr === 'object', '/api/debug includes boardScanRateHz object');
+  if (!bsr) return;
+
+  // Every board group that has active boards in the config must report > 0 Hz.
+  // If 0, the "Board ingest scan rate" card shows "---" for that row.
+  const boardGroups: Array<[string, string]> = [
+    ['pt1', 'PT B21 scan rate'],
+    ['tc',  'TC B51 scan rate'],
+    ['rtd', 'RTD B31 scan rate'],
+    ['lc',  'LC B41 scan rate'],
+    ['enc', 'ENC B61 scan rate'],
+    ['act', 'ACT B12/14 scan rate'],
+  ];
+  for (const [key, label] of boardGroups) {
+    const hz = typeof bsr[key] === 'number' ? bsr[key] : -1;
+    assert(
+      hz > 0,
+      `${label}: boardScanRateHz.${key} > 0 Hz (got ${hz.toFixed !== undefined ? hz.toFixed(1) : hz}) — card shows "---"`,
+    );
+  }
+}
+
 // ── Sensor Info pane · WebSocket contract (integration) ────────────────────
 // Asserts every useSensorValue(entity, component) on sensor-info/page.tsx has
 // received ≥1 SENSOR_UPDATE with a finite value in the collection window (cells
 // would not stay "---"). Covers both raw and calibrated columns per row.
-// Not asserted: Frontend Rate (client-side Hz), backend ingest header (HTTP /api/debug).
+// Not asserted: Frontend Rate (client-side Hz).
 
 function rawEntityToCalEntity(rawEntity: string): string {
   const dot = rawEntity.indexOf('.');
@@ -1965,6 +2023,7 @@ async function main(): Promise<void> {
   try {
     if (runTest('sensor_config')) await testSensorConfigEntityFormat();
     if (runTest('sensor_data')) await testSensorDataFlow(ws);
+    if (IS_THIN && runTest('backend_debug_api')) await testBackendDebugApi();
     if (runTest('raw_cal_presence')) await testRawAndCalibratedPresence(ws);
     if (runTest('cal_stability')) await testCalibratedDataStability(ws);
     if (IS_THIN) {

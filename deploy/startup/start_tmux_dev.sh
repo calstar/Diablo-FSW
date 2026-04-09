@@ -52,15 +52,16 @@ if [ -z "$ELODIN_DB_BIN" ]; then
   exit 1
 fi
 
-# Build C++ binaries (ensures daq_bridge, sequencer, heartbeat, etc. are up to date)
-echo "🔨 Building C++ binaries..."
-ROOT_BUILD="$PROJECT/build"
-NPROC="$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)"
-SIM_FLAG="-DUSE_SIM=${USE_SIM:-0}"
-# Always reconfigure to ensure SIM flag is applied correctly
-cmake -S "$PROJECT" -B "$ROOT_BUILD" "$SIM_FLAG" -Wno-dev 2>/dev/null || { echo "❌ CMake configure failed"; exit 1; }
-cmake --build "$ROOT_BUILD" -j"$NPROC" 2>&1 | tail -5 || { echo "❌ C++ build failed"; exit 1; }
-echo "  ✅ C++ binaries built"
+# Build C++ binaries — same as `build` / `bash scripts/build.sh` (USE_SIM respected).
+# Set SKIP_CPP_BUILD=1 only if you already ran `USE_SIM=… bash scripts/build.sh` (e.g. Playwright E2E).
+if [ "${SKIP_CPP_BUILD:-0}" = "1" ]; then
+  echo "⏭️  Skipping C++ build (SKIP_CPP_BUILD=1 — binaries must already be built for this USE_SIM)."
+else
+  echo "🔨 Building C++ binaries..."
+  export USE_SIM="${USE_SIM:-0}"
+  bash "$PROJECT/scripts/build.sh" || { echo "❌ C++ build failed"; exit 1; }
+  echo "  ✅ C++ binaries built"
+fi
 
 # Ensure web-gui dependencies are installed (tmux panes assume they exist).
 if [ ! -d "$PROJECT/diablo_server/backend/node_modules" ]; then
@@ -184,7 +185,10 @@ CMD_LOG_BACKEND="/tmp/gui_logs/backend.log"
 CMD_WEB_BACKEND='printf "\n  ══ BACKEND — HTTP+WS :'"${THIN_WS_PORT}"' (server.ts → Elodin DB :2240) ══\n\n" && '"$WAIT_FOR_ELODIN"' && cd '"$PROJECT"'/diablo_server/backend && WS_PORT='"$THIN_WS_PORT"' ELODIN_HOST=127.0.0.1 ELODIN_PORT=2240 ACTUATOR_SERVICE_PORT='"$THIN_ACT_PORT"' npx tsx src/server.ts 2>&1 | tee '"$CMD_LOG_BACKEND"
 
 CMD_LOG_FRONTEND="/tmp/gui_logs/frontend.log"
-CMD_WEB_FRONTEND='printf "\n  ══ WEB GUI FRONTEND — HTTP :3000 ══\n\n" && sleep 3 && cd '"$PROJECT"'/diablo_server/frontend && OTA_SERVICE_PORT='"$OTA_CMD_PORT"' npm run dev 2>&1 | tee '"$CMD_LOG_FRONTEND"
+# Next.js inlines NEXT_PUBLIC_* when compiling client bundles. A stale or integration-test
+# .env.local (e.g. :8181) while thin backend runs on THIN_WS_PORT makes the UI show "---"
+# even though data exists — force API/WS to match this stack (shell env overrides .env.local).
+CMD_WEB_FRONTEND='printf "\n  ══ WEB GUI FRONTEND — HTTP :3000 ══\n\n" && sleep 3 && cd '"$PROJECT"'/diablo_server/frontend && OTA_SERVICE_PORT='"$OTA_CMD_PORT"' NEXT_PUBLIC_API_URL=http://127.0.0.1:'"${THIN_WS_PORT}"' NEXT_PUBLIC_WS_URL=ws://127.0.0.1:'"${THIN_WS_PORT}"' npm run dev 2>&1 | tee '"$CMD_LOG_FRONTEND"
 
 if [ -x "$OTA_BIN" ]; then
   CMD_LOG_OTA="/tmp/gui_logs/ota.log"
@@ -194,11 +198,13 @@ else
 fi
 
 # Board simulator (pane 0); set USE_SIM=1 to run (default off for real hardware)
-# Waits for the backend WS port so the full Elodin→backend subscription pipeline is
-# established before boards send one-shot self-test packets during SETUP.
+# Waits for the backend WS port so the Elodin→backend pipeline is up before traffic.
+# --skip-startup matches test/test_integration.sh: ACTIVE immediately (no SETUP wait for
+# SENSOR_CONFIG). Boards that bind to 127.0.0.* fallback never receive CONFIG to 192.168.2.*
+# and stayed in SETUP — encoder sent no 0x24 data → board-scan ENC stayed "--- Hz".
 if [ "${USE_SIM:-0}" = "1" ]; then
   CMD_LOG_SIM="/tmp/gui_logs/sim.log"
-  CMD_SIM='printf "\n  ══ BOARD SIMULATOR — UDP → :5006 (All Boards) ══\n\n" && '"$WAIT_FOR_BACKEND"' && cd '"$PROJECT"' && exec '"$PYTHON_BIN"' sim/board_simulator.py --config '"$CONFIG_FILE"' --target 127.0.0.1 --port 5006 2>&1 | tee '"$CMD_LOG_SIM"
+  CMD_SIM='printf "\n  ══ BOARD SIMULATOR — UDP → :5006 (All Boards) ══\n\n" && '"$WAIT_FOR_BACKEND"' && cd '"$PROJECT"' && exec '"$PYTHON_BIN"' sim/board_simulator.py --config '"$CONFIG_FILE"' --target 127.0.0.1 --port 5006 --skip-startup 2>&1 | tee '"$CMD_LOG_SIM"
 else
   CMD_SIM='printf "\n  ══ BOARD SIMULATOR — DISABLED (USE_SIM=1 to enable) ══\n\n" && sleep infinity'
 fi
@@ -299,10 +305,10 @@ launch_background() {
   echo "    Backend:      PID $! → $LOGDIR/backend.log"
 
   # Frontend
-  nohup bash -c "cd '$PROJECT/diablo_server/frontend' && exec npm run dev" >> "$LOGDIR/frontend.log" 2>&1 &
+  nohup bash -c "cd '$PROJECT/diablo_server/frontend' && NEXT_PUBLIC_API_URL=http://127.0.0.1:${THIN_WS_PORT} NEXT_PUBLIC_WS_URL=ws://127.0.0.1:${THIN_WS_PORT} exec npm run dev" >> "$LOGDIR/frontend.log" 2>&1 &
   echo "    Frontend:     PID $! → $LOGDIR/frontend.log"
 
-  # Simulator LAST (if USE_SIM=1) — must wait for backend so self-test isn't missed
+  # Simulator LAST (if USE_SIM=1) — wait for backend; --skip-startup matches tmux CMD_SIM
   if [ "${USE_SIM:-0}" = "1" ]; then
     echo -n "    Waiting for backend WS (port ${THIN_WS_PORT})..."
     for i in $(seq 1 40); do
@@ -311,7 +317,7 @@ launch_background() {
       echo -n "."
     done
     echo " ready"
-    nohup bash -c "cd '$PROJECT' && exec '$PYTHON_BIN' sim/board_simulator.py --config '$CONFIG_FILE'" >> "$LOGDIR/sim.log" 2>&1 &
+    nohup bash -c "cd '$PROJECT' && exec '$PYTHON_BIN' sim/board_simulator.py --config '$CONFIG_FILE' --skip-startup" >> "$LOGDIR/sim.log" 2>&1 &
     echo "    Simulator:    PID $! → $LOGDIR/sim.log"
   fi
 
@@ -359,7 +365,12 @@ if tmux new-session -d -s "$SESSION" -n main -x 240 -y 70 \
   echo "│  Override: THIN_WS_PORT THIN_ACTUATOR_SERVICE_PORT OTA_SERVICE_CMD_PORT │"
   echo "│  Ctrl+B arrows=switch  D=detach                              │"
   echo "└─────────────────────────────────────────────────────────────┘"
-  tmux attach -t "$SESSION"
+  # TMUX_ATTACH=0: start session detached (automation / scripts). Default: attach for interactive use.
+  if [ "${TMUX_ATTACH:-1}" != "0" ]; then
+    tmux attach -t "$SESSION"
+  else
+    echo "  Tmux session '$SESSION' running detached (attach: tmux attach -t $SESSION)"
+  fi
 else
   echo "  ⚠️  tmux unavailable (no TTY?) — falling back to background processes"
   launch_background

@@ -290,6 +290,9 @@ export function buildAliasesFromConfig(config: any): void {
 
   ALIASES = aliases;
   ACT_ROLE_TO_CMD_ENTITY = roleToCmdEntity;
+  // Bump stale tick so any selector that reads ALIASES (useActuatorCommandedState,
+  // useGetSensorValue, etc.) re-evaluates immediately with the new alias map.
+  useSensorStore.setState(s => ({ _staleRenderTick: (s._staleRenderTick ?? 0) + 1 }));
   console.log(`[Store] Built ${Object.keys(aliases).length} entity aliases from config`);
 }
 

@@ -20,26 +20,30 @@ let lastPrune = 0;
 
 export type BoardScanGroupId = 'pt1' | 'pt2' | 'tc' | 'rtd' | 'lc' | 'act' | 'enc';
 
+/**
+ * Calibrated Elodin packets carry raw_adc_counts on *Cal entities (e.g. PT1_Cal.CH1),
+ * not PT1.CH1. Raw-only packets use PT1.CH1. Both must count toward board scan rate.
+ */
 function mapEntityToGroup(entity: string): BoardScanGroupId | null {
-  if (entity.startsWith('PT1.')) return 'pt1';
-  if (entity.startsWith('PT2.')) return 'pt2';
-  if (/^TC\d+\.CH/.test(entity)) return 'tc';
-  if (/^RTD\d+\.CH/.test(entity)) return 'rtd';
-  if (/^LC\d+\.CH/.test(entity)) return 'lc';
-  if (/^ACT\d+\.CH/.test(entity)) return 'act';
-  if (/^ENC\d+\.CH/.test(entity)) return 'enc';
+  if (/^PT1(_Cal)?\.CH/.test(entity)) return 'pt1';
+  if (/^PT2(_Cal)?\.CH/.test(entity)) return 'pt2';
+  if (/^TC\d+(_Cal)?\.CH/.test(entity)) return 'tc';
+  if (/^RTD\d+(_Cal)?\.CH/.test(entity)) return 'rtd';
+  if (/^LC\d+(_Cal)?\.CH/.test(entity)) return 'lc';
+  if (/^ACT\d+(_Cal)?\.CH/.test(entity)) return 'act';
+  if (/^ENC\d+(_Cal)?\.CH/.test(entity)) return 'enc';
   return null;
 }
 
 function isPrimaryPhysicalStream(entity: string, component: string): boolean {
   if (component === 'raw_adc_counts') {
-    return /^PT\d+\.CH|^TC\d+\.CH|^LC\d+\.CH|^ACT\d+\.CH/.test(entity);
+    return /^PT\d+(_Cal)?\.CH|^TC\d+(_Cal)?\.CH|^LC\d+(_Cal)?\.CH|^ACT\d+(_Cal)?\.CH/.test(entity);
   }
   if (component === 'raw_resistance_counts') {
-    return /^RTD\d+\.CH/.test(entity);
+    return /^RTD\d+(_Cal)?\.CH/.test(entity);
   }
   if (component === 'raw_angle') {
-    return /^ENC\d+\.CH/.test(entity);
+    return /^ENC\d+(_Cal)?\.CH/.test(entity);
   }
   return false;
 }

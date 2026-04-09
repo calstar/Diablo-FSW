@@ -498,11 +498,15 @@ export default function SensorInfoPage() {
             <div className="flex gap-6 items-baseline">
               <div>
                 <span className="text-gray-500 mr-1">Packets:</span>
-                <span className="text-cyan-400">{relayPackets != null ? relayPackets.toLocaleString() : '---'}</span>
+                <span className="text-cyan-400" data-testid="sensor-info-packets-count">
+                  {relayPackets != null ? relayPackets.toLocaleString() : '---'}
+                </span>
               </div>
               <div>
                 <span className="text-gray-500 mr-1">Ingest Rate:</span>
-                <span className="text-cyan-400">{fmtHz(relayRateHz)} Hz</span>
+                <span className="text-cyan-400" data-testid="sensor-info-ingest-rate-hz">
+                  {fmtHz(relayRateHz)} Hz
+                </span>
               </div>
             </div>
             <div className="text-[10px] text-gray-600 mt-1">
@@ -517,7 +521,7 @@ export default function SensorInfoPage() {
             <div className="text-[10px] text-gray-600 mb-1">
               Mean per-channel rate from relay before WebSocket throttle (true DAQ/board delivery rate).
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7 gap-x-4 gap-y-1">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7 gap-x-4 gap-y-1" data-testid="sensor-info-board-scan">
               <div>
                 <div className="text-[10px] text-gray-500">PT B21 (PT1.*)</div>
                 <div className="text-cyan-400">{fmtHz(boardScanHz.pt1)} Hz</div>

@@ -30,62 +30,7 @@ The duration update is silently lost, meaning the fire window doesn't extend as 
 
 ---
 
-## High
-
-### Frontend — Three dashboards duplicate every piece of logic
-**Files:** `diablo_server/frontend/components/dashboard/UnifiedDashboard.tsx`, `IpadDashboard.tsx`, `MobileDashboard.tsx`
-
-Config fetching, actuator role loading, pressure sensor loading, time-window state, and the `CONFIG_UPDATED` WebSocket subscription are copy-pasted across all three files. Any bug fix or new field requires three identical edits. This is how the `NAME_TO_ACTUATOR_ID` crash and the `useMemo`/`useCallback` missing-import bugs were introduced — they were fixed in one file but not the others.
-
-**Fix:** Extract two custom hooks:
-- `useActuatorsFromConfig()` — fetches `/api/config`, parses `actuator_roles`, re-fetches on `CONFIG_UPDATED`.
-- `usePressureSensors()` — fetches `/api/sensor-config`, filters calibrated PTs, falls back to `PRESSURE_SENSORS`.
-
-Both are then one-liners in each dashboard. The rendering differences (grid vs. list vs. scrollable) stay in the component.
-
----
-
-### Frontend — `getState()` called outside React hooks breaks reactivity
-**Files:** `diablo_server/frontend/components/controls/ActuatorControlByName.tsx:40`, `diablo_server/frontend/app/config/page.tsx:145`, `diablo_server/frontend/app/sensor-info/page.tsx:414`, and others
-
-`useSensorStore.getState()` called outside a hook or selector returns a snapshot at call time and does not subscribe to updates. Any component that reads store state this way will never re-render when the store changes, silently showing stale data.
-
-**Fix:** Replace every `useSensorStore.getState().X` with a hook selector: `const x = useSensorStore(s => s.X)`. For event handlers that need synchronous access (e.g., inside a `useCallback`), call `useSensorStore.getState()` only at the moment the handler fires, not at render time.
-
----
-
-### Frontend — Mutable global alias state is not thread-safe
-**File:** `diablo_server/frontend/lib/store.ts:110-291`
-
-`ALIASES` and `ACT_ROLE_TO_CMD_ENTITY` are plain module-level `let` variables that get replaced wholesale when config loads. Any component currently iterating or reading from the old alias map will see a torn state mid-read. There is no locking and no notification when the swap happens.
-
-**Fix:** Move alias maps into Zustand state alongside the rest of the store. Expose a `setAliases()` action that does an atomic replacement. Components that depend on aliases subscribe via selectors and re-render cleanly when the aliases change.
-
----
-
-### C++ — Inconsistent mutex usage in ActuatorCommander
-**File:** `diablo_server/services/sequencer/ActuatorCommander.cpp:360,380,471,476`
-
-`overrides_mutex_` is acquired in some call sites but not in `sendActuatorCommand()`, which reads from `overrides_`. If the override map is modified on another thread while a command is being sent, the read is a data race — undefined behavior in C++.
-
-**Fix:** Add `std::lock_guard<std::mutex> lock(overrides_mutex_)` at the top of every function that reads or writes `overrides_`. Consider replacing the raw map + mutex with a `std::atomic` flag per channel if the access pattern allows it.
-
----
-
 ## Medium
-
-### Frontend — Silent exception swallowing in WebSocket dispatch
-**File:** `diablo_server/frontend/lib/websocket.ts:233`
-
-```ts
-try { listener(message.payload); } catch { /* silent */ }
-```
-
-Any exception thrown by a registered listener (null pointer, bad data shape, etc.) is silently discarded. This makes listener bugs completely invisible — the listener just stops working with no indication in the console.
-
-**Fix:** At minimum, `console.error('[WS] listener threw:', err)` in the catch block. In dev builds, rethrow so the error surfaces in the browser devtools. Never use an empty catch block in a dispatch path.
-
----
 
 ### Frontend — Verbose `console.log` statements in production builds
 **Files:** `lib/websocket.ts:100,109,111,114,212,220,390`, `UnifiedDashboard.tsx:104`, `IpadDashboard.tsx:99`, `StateMachineDiagram.tsx:283`
@@ -255,7 +200,7 @@ And log each failed attempt at `DEBUG` level so it's visible when diagnosing iss
 ---
 
 ### Frontend — API response shapes typed as `any`
-**Files:** `diablo_server/frontend/components/dashboard/UnifiedDashboard.tsx:33`, `diablo_server/frontend/app/config/page.tsx:661-739`
+**Files:** `diablo_server/frontend/lib/dashboard-hooks.ts`, `diablo_server/frontend/app/config/page.tsx:661-739`
 
 Fetch responses from `/api/config` and `/api/sensor-config` are typed as `any` or cast with `as any`. If the backend changes a field name or nests data differently, the frontend silently receives `undefined` values which propagate through the render tree as broken UI with no error.
 

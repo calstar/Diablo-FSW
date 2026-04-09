@@ -238,7 +238,7 @@ export class WebSocketClient {
     const listeners = this.listeners.get(typeStr);
     if (listeners && listeners.size > 0) {
       listeners.forEach(listener => {
-        try { listener(message.payload); } catch { /* silent */ }
+        try { listener(message.payload); } catch (err) { console.error('[WS] listener threw:', err); }
       });
     }
     if (message.type === MessageType.CONNECTION_STATUS) {

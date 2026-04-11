@@ -82,7 +82,7 @@ export interface SensorUpdate {
     timestamp: number;
 }
 export interface ActuatorUpdate {
-    actuatorId: ActuatorId;
+    actuatorId?: number;
     name: string;
     state: ActuatorState;
     rawAdcCounts: number;

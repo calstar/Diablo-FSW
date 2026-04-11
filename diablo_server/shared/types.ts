@@ -93,6 +93,8 @@ export interface SensorUpdate {
 
 // Actuator update payload
 export interface ActuatorUpdate {
+  /** Optional numeric id for keyed maps (tests / legacy payloads). */
+  actuatorId?: number;
   /** Config role name (e.g. "LOX Main") — primary identifier */
   name: string;
   state: ActuatorState;

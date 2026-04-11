@@ -189,7 +189,7 @@ describe('Alias resolution via getSensorValue()', () => {
     expect(value).toBe(1500000);
   });
 
-  it('should resolve LC raw ADC from cal entity when raw entity key is missing', () => {
+  it('LC: raw_adc_counts live on cal entities (LCn_Cal.CH*), not raw LCn.CH*', () => {
     buildAliasesFromConfig({
       boards: {
         lc2: { type: 'LC', board_id: 42, enabled: true, active_connectors: [1, 2, 6] },
@@ -200,7 +200,8 @@ describe('Alias resolution via getSensorValue()', () => {
     });
     recordSensorUpdate('LC2_Cal.CH1', 'raw_adc_counts');
 
-    expect(useSensorStore.getState().getSensorValue('LC2.CH1', 'raw_adc_counts')).toBe(9876543);
+    expect(useSensorStore.getState().getSensorValue('LC2_Cal.CH1', 'raw_adc_counts')).toBe(9876543);
+    expect(useSensorStore.getState().getSensorValue('LC2.CH1', 'raw_adc_counts')).toBeNull();
   });
 
   it('should prefer direct value over alias', () => {

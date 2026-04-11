@@ -238,8 +238,16 @@ if [ ! -d "$FSW_BUILD_DIR" ]; then
   mkdir -p "$FSW_BUILD_DIR"
   (cd "$FSW_BUILD_DIR" && cmake "$REPO_ROOT")
 fi
-(cd "$FSW_BUILD_DIR" && make -j"$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)" \
-  fsw_daq_lib daq_bridge sequencer_service heartbeat_service config_broadcast_service calibration_service controller_service 2>&1) \
+# Use cmake --build (not make): CI uses -G Ninja, which has no Makefile targets for make(1).
+NPROC="$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)"
+(cd "$FSW_BUILD_DIR" && cmake --build . --parallel "$NPROC" \
+  --target fsw_daq_lib \
+  --target daq_bridge \
+  --target sequencer_service \
+  --target heartbeat_service \
+  --target config_broadcast_service \
+  --target calibration_service \
+  --target controller_service 2>&1) \
   || fail "C++ build failed"
 echo "  ✅ C++ binaries built"
 echo ""

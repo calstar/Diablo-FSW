@@ -39,8 +39,8 @@ This starts the **guitest** stack (`USE_SIM=1`, detached tmux — no interactive
 
 ## CI
 
-- **Integration job:** `INTEGRATION_RUN_PLAYWRIGHT_E2E=1` in `.github/workflows/ci.yml` — `test/test_integration.sh` runs `npx playwright test e2e` after WebSocket tests (its own stack).
-- **Guitest E2E job:** `playwright-guitest-e2e` runs `bash test/e2e_guitest_playwright.sh` (full tmux guitest stack, same as local). Installs `npx playwright install --with-deps chromium` and `tmux` on the runner.
+- **Integration job:** `bash test/test_integration.sh` only (WebSocket / Elodin / stack checks). No browser tests.
+- **Guitest E2E job:** `playwright-guitest-e2e` runs `bash test/e2e_guitest_playwright.sh` (full tmux guitest stack). That is browser E2E in CI.
 
 ## What the tests check
 

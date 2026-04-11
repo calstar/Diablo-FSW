@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 /**
  * E2E tests assume Next.js is already running (see test/e2e_sensor_info.sh or
- * INTEGRATION_RUN_PLAYWRIGHT_E2E in test/test_integration.sh).
+ * test/e2e_guitest_playwright.sh). Browser tests are separate from test/test_integration.sh.
  *
  * PLAYWRIGHT_BASE_URL — browser navigates here (Next origin only).
  * NEXT_PUBLIC_API_URL / NEXT_PUBLIC_WS_URL — set when starting `npm run dev` (baked at compile time).

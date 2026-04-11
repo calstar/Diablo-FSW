@@ -136,6 +136,14 @@ pkill -f "ota_service" 2>/dev/null || true
 # Replaces fixed sleep delays so services start as soon as the DB is ready.
 WAIT_FOR_ELODIN='echo "  ⏳ Waiting for Elodin DB (port 2240)..." && for i in $(seq 1 30); do (echo >/dev/tcp/127.0.0.1/2240) 2>/dev/null && break; sleep 1; done'
 
+# wait_for_daq: poll daq.log until daq_bridge has registered VTables with Elodin.
+# Without this, the backend may subscribe to VTableStreams that don't exist yet.
+WAIT_FOR_DAQ='echo "  ⏳ Waiting for DAQ bridge VTables..." && for i in $(seq 1 60); do grep -q "Drain complete, ready for TABLE data" /tmp/gui_logs/daq.log 2>/dev/null && break; sleep 0.5; done && echo "  ✅ DAQ bridge ready"'
+
+# wait_for_calibration: poll calibration.log until calibration_service has registered VTables.
+# Backend and controller subscribe to calibrated data — must wait for these VTables to exist.
+WAIT_FOR_CALIBRATION='echo "  ⏳ Waiting for calibration service VTables..." && for i in $(seq 1 60); do grep -q "registered calibrated VTables, subscribed" /tmp/gui_logs/calibration.log 2>/dev/null && break; sleep 0.5; done && echo "  ✅ Calibration service ready"'
+
 # Publisher: writes UDP sensor data → Elodin DB. Without this, nothing is written to the DB.
 DAQ_BIN="$PROJECT/build/bin/daq_bridge"
 if [ ! -x "$DAQ_BIN" ]; then
@@ -154,7 +162,7 @@ CTRL_LUT="${LUT_PATH:-$PROJECT/output/lut/controller_policy_fsw.bin}"
 CTRL_OPTS="--config $CONFIG_FILE --elodin-host 127.0.0.1"
 [ -f "$CTRL_LUT" ] && CTRL_OPTS="$CTRL_OPTS --lut-path $CTRL_LUT"
 CMD_LOG_CTRL="/tmp/gui_logs/controller.log"
-CMD_CTRL='printf "\n  ══ CONTROLLER SERVICE (DB Calibrated → Actuators) ══\n\n" && '"$WAIT_FOR_ELODIN"' && cd '"$PROJECT"' && exec '"$CTRL_BIN"' '"$CTRL_OPTS"' 2>&1 | tee '"$CMD_LOG_CTRL"
+CMD_CTRL='printf "\n  ══ CONTROLLER SERVICE (DB Calibrated → Actuators) ══\n\n" && '"$WAIT_FOR_ELODIN"' && '"$WAIT_FOR_CALIBRATION"' && cd '"$PROJECT"' && exec '"$CTRL_BIN"' '"$CTRL_OPTS"' 2>&1 | tee '"$CMD_LOG_CTRL"
 
 # Sequencer service: state machine + actuator UDP (same TCP :9998 text protocol as server.ts)
 SEQ_BIN="$PROJECT/build/bin/sequencer_service"
@@ -182,7 +190,7 @@ THIN_ACT_PORT="${THIN_ACTUATOR_SERVICE_PORT:-9998}"
 WAIT_FOR_BACKEND='echo "  ⏳ Waiting for backend WS (port '"$THIN_WS_PORT"')..." && for i in $(seq 1 40); do (echo >/dev/tcp/127.0.0.1/'"$THIN_WS_PORT"') 2>/dev/null && break; sleep 1; done && echo "  ✅ Backend ready"'
 
 CMD_LOG_BACKEND="/tmp/gui_logs/backend.log"
-CMD_WEB_BACKEND='printf "\n  ══ BACKEND — HTTP+WS :'"${THIN_WS_PORT}"' (server.ts → Elodin DB :2240) ══\n\n" && '"$WAIT_FOR_ELODIN"' && cd '"$PROJECT"'/diablo_server/backend && WS_PORT='"$THIN_WS_PORT"' ELODIN_HOST=127.0.0.1 ELODIN_PORT=2240 ACTUATOR_SERVICE_PORT='"$THIN_ACT_PORT"' npx tsx src/server.ts 2>&1 | tee '"$CMD_LOG_BACKEND"
+CMD_WEB_BACKEND='printf "\n  ══ BACKEND — HTTP+WS :'"${THIN_WS_PORT}"' (server.ts → Elodin DB :2240) ══\n\n" && '"$WAIT_FOR_ELODIN"' && '"$WAIT_FOR_DAQ"' && '"$WAIT_FOR_CALIBRATION"' && cd '"$PROJECT"'/diablo_server/backend && WS_PORT='"$THIN_WS_PORT"' ELODIN_HOST=127.0.0.1 ELODIN_PORT=2240 ACTUATOR_SERVICE_PORT='"$THIN_ACT_PORT"' npx tsx src/server.ts 2>&1 | tee '"$CMD_LOG_BACKEND"
 
 CMD_LOG_FRONTEND="/tmp/gui_logs/frontend.log"
 # Next.js inlines NEXT_PUBLIC_* when compiling client bundles. A stale or integration-test
@@ -291,14 +299,34 @@ launch_background() {
     echo "    Config:       PID $! → $LOGDIR/config.log"
   fi
 
-  # Controller
+  # Controller — wait for calibration VTables (subscribes to calibrated PT data)
   if [ -x "$CTRL_BIN" ]; then
+    echo -n "    Waiting for calibration service VTables (for controller)..."
+    for i in $(seq 1 60); do
+      grep -q "registered calibrated VTables, subscribed" "$LOGDIR/calibration.log" 2>/dev/null && break
+      sleep 0.5
+      echo -n "."
+    done
+    echo " ready"
     nohup bash -c "cd '$PROJECT' && exec '$CTRL_BIN' $CTRL_OPTS" >> "$LOGDIR/controller.log" 2>&1 &
     echo "    Controller:   PID $! → $LOGDIR/controller.log"
   fi
 
-  # Backend (wait a moment for DB-dependent services)
-  sleep 2
+  # Backend — wait for DAQ bridge and calibration VTables before subscribing
+  echo -n "    Waiting for DAQ bridge VTables..."
+  for i in $(seq 1 60); do
+    grep -q "Drain complete, ready for TABLE data" "$LOGDIR/daq.log" 2>/dev/null && break
+    sleep 0.5
+    echo -n "."
+  done
+  echo " ready"
+  echo -n "    Waiting for calibration service VTables..."
+  for i in $(seq 1 60); do
+    grep -q "registered calibrated VTables, subscribed" "$LOGDIR/calibration.log" 2>/dev/null && break
+    sleep 0.5
+    echo -n "."
+  done
+  echo " ready"
   nohup bash -c "cd '$PROJECT/diablo_server/backend' && WS_PORT='${THIN_WS_PORT}' ELODIN_HOST=127.0.0.1 ELODIN_PORT=2240 ACTUATOR_SERVICE_PORT='${THIN_ACT_PORT}' exec npx tsx watch src/server.ts" >> "$LOGDIR/backend.log" 2>&1 &
   echo "    Backend:      PID $! → $LOGDIR/backend.log"
 

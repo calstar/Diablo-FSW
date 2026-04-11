@@ -1,29 +1,7 @@
 name: CI/CD Pipeline
 
-on:
-  push:
-    branches:
-      - main
-      - master
-      - develop
-      - PT_Calibration
-      - Test_Branch
-      - unit-testing
-      - cpp-stack-and-cleanup
-      - web-gui-tests
-    tags:
-      - 'v*'
-  pull_request:
-    branches:
-      - main
-      - master
-      - develop
-      - PT_Calibration
-      - Test_Branch
-      - unit-testing
-      - cpp-stack-and-cleanup
-      - web-gui-tests
-  workflow_dispatch:
+# Quoted `on` — YAML 1.1 treats bare `on` as boolean true, which breaks workflow triggers in some parsers.
+'on': [push, pull_request, workflow_dispatch]
 
 env:
   BUILD_DIR: build
@@ -458,7 +436,7 @@ jobs:
     name: Integration Test
     runs-on: ubuntu-latest
     needs: [build]
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     steps:
     - name: Checkout code
@@ -511,13 +489,77 @@ jobs:
       run: |
         cd diablo_server/backend && npm install
 
+    - name: Install frontend dependencies (Playwright E2E)
+      run: |
+        cd diablo_server/frontend && npm ci && npx playwright install --with-deps chromium
+
     - name: Install Python dependencies
       run: |
         pip3 install tomli || true
 
     - name: Run integration test
+      env:
+        INTEGRATION_RUN_PLAYWRIGHT_E2E: '1'
       run: |
         bash test/test_integration.sh
+
+  # Full guitest stack + Playwright (same as local: bash test/e2e_guitest_playwright.sh)
+  playwright-guitest-e2e:
+    name: Playwright E2E (guitest stack)
+    runs-on: ubuntu-latest
+    needs: [build]
+    timeout-minutes: 45
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential cmake ninja-build libeigen3-dev pkg-config \
+          gcc-12 g++-12 python3 python3-pip tmux
+
+    - name: Install elodin-db
+      run: |
+        ELODIN_VERSION="v0.16.1"
+        ELODIN_DB_INSTALLER_URL="https://github.com/elodin-sys/elodin/releases/download/${ELODIN_VERSION}/elodin-db-installer.sh"
+        mkdir -p "$HOME/.cargo/bin"
+        echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+        export PATH="$HOME/.cargo/bin:$PATH"
+        curl --proto '=https' --tlsv1.2 -LsSf "$ELODIN_DB_INSTALLER_URL" | sh
+
+    - name: Verify elodin-db is on PATH
+      run: command -v elodin-db && elodin-db --help >/dev/null
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+        cache-dependency-path: diablo_server/frontend/package-lock.json
+
+    - name: Install backend dependencies
+      run: cd diablo_server/backend && npm ci || npm install
+
+    - name: Install frontend dependencies and Playwright Chromium (system libs + browser)
+      run: |
+        cd diablo_server/frontend
+        npm ci || npm install
+        npx playwright install --with-deps chromium
+
+    - name: Install Python dependencies (sim / config)
+      run: pip3 install tomli || pip3 install --user tomli || true
+
+    # test/e2e_guitest_playwright.sh runs USE_SIM=1 scripts/build.sh then starts the stack (tmux or fallback).
+    - name: Run Playwright guitest E2E
+      env:
+        CC: gcc-12
+        CXX: g++-12
+      run: bash test/e2e_guitest_playwright.sh
 
   # Build summary
   build-summary:
@@ -532,6 +574,7 @@ jobs:
       - security-scan
       - test
       - integration-test
+      - playwright-guitest-e2e
     if: always()
 
     steps:
@@ -549,3 +592,4 @@ jobs:
         echo "| Security Scan | ${{ needs.security-scan.result }} |" >> $GITHUB_STEP_SUMMARY
         echo "| Tests | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
         echo "| Integration Test | ${{ needs.integration-test.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Playwright E2E (guitest) | ${{ needs.playwright-guitest-e2e.result }} |" >> $GITHUB_STEP_SUMMARY

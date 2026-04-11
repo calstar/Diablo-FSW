@@ -50,6 +50,11 @@ logs/
 *.swo
 *~
 
+# Playwright (frontend E2E)
+**/playwright-report/
+**/test-results/
+**/blob-report/
+
 # Node modules (root and nested)
 node_modules/
 

@@ -489,17 +489,12 @@ jobs:
       run: |
         cd diablo_server/backend && npm install
 
-    - name: Install frontend dependencies (Playwright E2E)
-      run: |
-        cd diablo_server/frontend && npm ci && npx playwright install --with-deps chromium
-
     - name: Install Python dependencies
       run: |
         pip3 install tomli || true
 
+    # WebSocket / stack checks only. Browser E2E runs in job playwright-guitest-e2e (full guitest stack).
     - name: Run integration test
-      env:
-        INTEGRATION_RUN_PLAYWRIGHT_E2E: '1'
       run: |
         bash test/test_integration.sh
 

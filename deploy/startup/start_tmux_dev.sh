@@ -193,10 +193,10 @@ CMD_LOG_BACKEND="/tmp/gui_logs/backend.log"
 CMD_WEB_BACKEND='printf "\n  ══ BACKEND — HTTP+WS :'"${THIN_WS_PORT}"' (server.ts → Elodin DB :2240) ══\n\n" && '"$WAIT_FOR_ELODIN"' && '"$WAIT_FOR_DAQ"' && '"$WAIT_FOR_CALIBRATION"' && cd '"$PROJECT"'/diablo_server/backend && WS_PORT='"$THIN_WS_PORT"' ELODIN_HOST=127.0.0.1 ELODIN_PORT=2240 ACTUATOR_SERVICE_PORT='"$THIN_ACT_PORT"' npx tsx src/server.ts 2>&1 | tee '"$CMD_LOG_BACKEND"
 
 CMD_LOG_FRONTEND="/tmp/gui_logs/frontend.log"
-# Next.js inlines NEXT_PUBLIC_* when compiling client bundles. A stale or integration-test
-# .env.local (e.g. :8181) while thin backend runs on THIN_WS_PORT makes the UI show "---"
-# even though data exists — force API/WS to match this stack (shell env overrides .env.local).
-CMD_WEB_FRONTEND='printf "\n  ══ WEB GUI FRONTEND — HTTP :3000 ══\n\n" && sleep 3 && cd '"$PROJECT"'/diablo_server/frontend && OTA_SERVICE_PORT='"$OTA_CMD_PORT"' NEXT_PUBLIC_API_URL=http://127.0.0.1:'"${THIN_WS_PORT}"' NEXT_PUBLIC_WS_URL=ws://127.0.0.1:'"${THIN_WS_PORT}"' npm run dev 2>&1 | tee '"$CMD_LOG_FRONTEND"
+# Don't set NEXT_PUBLIC_API_URL / NEXT_PUBLIC_WS_URL — the frontend auto-detects them from
+# window.location.hostname at runtime, so remote devices hitting http://<host>:3000 can reach
+# the backend on the same host. Hardcoding 127.0.0.1 here breaks LAN clients.
+CMD_WEB_FRONTEND='printf "\n  ══ WEB GUI FRONTEND — HTTP :3000 ══\n\n" && sleep 3 && cd '"$PROJECT"'/diablo_server/frontend && OTA_SERVICE_PORT='"$OTA_CMD_PORT"' npm run dev 2>&1 | tee '"$CMD_LOG_FRONTEND"
 
 if [ -x "$OTA_BIN" ]; then
   CMD_LOG_OTA="/tmp/gui_logs/ota.log"
@@ -331,7 +331,7 @@ launch_background() {
   echo "    Backend:      PID $! → $LOGDIR/backend.log"
 
   # Frontend
-  nohup bash -c "cd '$PROJECT/diablo_server/frontend' && NEXT_PUBLIC_API_URL=http://127.0.0.1:${THIN_WS_PORT} NEXT_PUBLIC_WS_URL=ws://127.0.0.1:${THIN_WS_PORT} exec npm run dev" >> "$LOGDIR/frontend.log" 2>&1 &
+  nohup bash -c "cd '$PROJECT/diablo_server/frontend' && exec npm run dev" >> "$LOGDIR/frontend.log" 2>&1 &
   echo "    Frontend:     PID $! → $LOGDIR/frontend.log"
 
   # Simulator LAST (if USE_SIM=1) — wait for backend; same args as tmux CMD_SIM (full startup)

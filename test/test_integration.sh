@@ -140,7 +140,7 @@ cleanup() {
 }
 
 trap 'cleanup; exit 130' INT TERM
-trap cleanup EXIT
+trap 'rc=$?; cleanup; exit $rc' EXIT
 
 fail() {
   echo "❌ FAIL: $1"

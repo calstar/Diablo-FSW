@@ -50,7 +50,7 @@ jobs:
 
     # API routes import ../backend/src/* which uses @iarna/toml; install backend so resolution + alias work in next build.
     - name: Install backend dependencies
-      working-directory: web-gui/backend
+      working-directory: diablo_server/backend
       run: npm ci || npm install
 
     - name: Install frontend dependencies

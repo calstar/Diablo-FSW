@@ -27,6 +27,7 @@ import EncodersPage from '@/app/encoders/page';
 import LivestreamPage from '@/app/livestream/page';
 import SelfTestsPage from '@/app/self-tests/page';
 import FeedCharacterizationPage from '@/app/plots/feed-characterization/page';
+import TablingPage from '@/app/plots/tabling/page';
 
 const viewComponents: Record<string, React.ComponentType> = {
   fuel: FuelGraphsPage,
@@ -52,6 +53,7 @@ const viewComponents: Record<string, React.ComponentType> = {
   livestream: LivestreamPage,
   'self-tests': SelfTestsPage,
   'feed-char': FeedCharacterizationPage,
+  tabling: TablingPage,
 };
 
 export default function WindowViewPage() {

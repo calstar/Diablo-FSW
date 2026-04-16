@@ -19,12 +19,15 @@ export interface TcRowConfig {
   calEntity: string;
   label: string;
   voltageReference: number;
+  /** Physical board id from config (for disambiguating dropdowns when multiple TC boards exist). */
+  boardId: number;
 }
 
 export interface RtdLcRowConfig {
   entity: string;
   calEntity: string;
   label: string;
+  boardId?: number;
 }
 
 export function buildTcDataFromBoards(boards: Record<string, unknown>): TcRowConfig[] {
@@ -45,6 +48,7 @@ export function buildTcDataFromBoards(boards: Record<string, unknown>): TcRowCon
         calEntity: `TC${bn}_Cal.CH${ch}`,
         label: `TC Ch${ch}`,
         voltageReference: ref,
+        boardId,
       });
     }
   }
@@ -67,6 +71,7 @@ export function buildRtdDataFromBoards(boards: Record<string, unknown>): RtdLcRo
         entity: `RTD${bn}.CH${ch}`,
         calEntity: `RTD${bn}_Cal.CH${ch}`,
         label: `RTD Ch${ch}`,
+        boardId,
       });
     }
   }
@@ -89,6 +94,31 @@ export function buildLcDataFromBoards(boards: Record<string, unknown>): RtdLcRow
         entity: `LC${bn}.CH${ch}`,
         calEntity: `LC${bn}_Cal.CH${ch}`,
         label: `LC Ch${ch}`,
+        boardId,
+      });
+    }
+  }
+  return out;
+}
+
+/** All PT channels per enabled PT board (no excitation filtering — operator picks the right connector). */
+export function buildPtCalDataFromBoards(boards: Record<string, unknown>): RtdLcRowConfig[] {
+  const out: RtdLcRowConfig[] = [];
+  for (const board of Object.values(boards)) {
+    const b = board as Record<string, unknown>;
+    if (b.type !== 'PT' || b.enabled === false) continue;
+    const boardId = typeof b.board_id === 'number' ? b.board_id : 1;
+    const bn = elodinSlotFromBoardId(boardId);
+    const active: number[] =
+      Array.isArray(b.active_connectors) && (b.active_connectors as number[]).length > 0
+        ? (b.active_connectors as number[])
+        : Array.from({ length: (b.num_sensors as number) ?? 10 }, (_, i) => i + 1);
+    for (const ch of active) {
+      out.push({
+        entity: `PT${bn}.CH${ch}`,
+        calEntity: `PT${bn}_Cal.CH${ch}`,
+        label: `PT Ch${ch} (B${boardId})`,
+        boardId,
       });
     }
   }
@@ -171,10 +201,10 @@ export function buildActChannelsFromBoards(boards: Record<string, unknown>): {
 
 /** Defaults aligned with integration config.toml (tc_board 51, rtd 31, lc 42, act 12/14). */
 export const SENSOR_INFO_DEFAULT_TC_DATA: TcRowConfig[] = [
-  { entity: 'TC1.CH2', calEntity: 'TC1_Cal.CH2', label: 'TC Ch2', voltageReference: 0 },
-  { entity: 'TC1.CH3', calEntity: 'TC1_Cal.CH3', label: 'TC Ch3', voltageReference: 0 },
-  { entity: 'TC1.CH4', calEntity: 'TC1_Cal.CH4', label: 'TC Ch4', voltageReference: 0 },
-  { entity: 'TC1.CH5', calEntity: 'TC1_Cal.CH5', label: 'TC Ch5', voltageReference: 0 },
+  { entity: 'TC1.CH2', calEntity: 'TC1_Cal.CH2', label: 'TC Ch2', voltageReference: 0, boardId: 51 },
+  { entity: 'TC1.CH3', calEntity: 'TC1_Cal.CH3', label: 'TC Ch3', voltageReference: 0, boardId: 51 },
+  { entity: 'TC1.CH4', calEntity: 'TC1_Cal.CH4', label: 'TC Ch4', voltageReference: 0, boardId: 51 },
+  { entity: 'TC1.CH5', calEntity: 'TC1_Cal.CH5', label: 'TC Ch5', voltageReference: 0, boardId: 51 },
 ];
 
 export const SENSOR_INFO_DEFAULT_RTD_DATA: RtdLcRowConfig[] = [

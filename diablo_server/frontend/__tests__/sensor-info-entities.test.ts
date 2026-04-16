@@ -3,6 +3,7 @@ import {
   buildActChannelsFromBoards,
   buildEncoderDataFromBoards,
   buildLcDataFromBoards,
+  buildPtCalDataFromBoards,
   buildRtdDataFromBoards,
   buildTcDataFromBoards,
   elodinSlotFromBoardId,
@@ -48,6 +49,13 @@ const INTEGRATION_LIKE_BOARDS: Record<string, unknown> = {
     active_connectors: [1, 2],
     num_sensors: 2,
   },
+  pt_board: {
+    type: 'PT',
+    enabled: true,
+    board_id: 1,
+    active_connectors: [1, 2, 3],
+    num_sensors: 10,
+  },
 };
 
 describe('elodinSlotFromBoardId', () => {
@@ -75,6 +83,10 @@ describe('Sensor Info entity names (must match Elodin /api/sensor-config)', () =
     const lc = buildLcDataFromBoards(INTEGRATION_LIKE_BOARDS);
     expect(lc.map((r) => r.entity)).toEqual(['LC2.CH1', 'LC2.CH2', 'LC2.CH6']);
     expect(lc.map((r) => r.calEntity)).toEqual(['LC2_Cal.CH1', 'LC2_Cal.CH2', 'LC2_Cal.CH6']);
+
+    const pt = buildPtCalDataFromBoards(INTEGRATION_LIKE_BOARDS);
+    expect(pt.map((r) => r.calEntity)).toEqual(['PT1_Cal.CH1', 'PT1_Cal.CH2', 'PT1_Cal.CH3']);
+    expect(pt[0].label).toBe('PT Ch1 (B1)');
 
     const act = buildActChannelsFromBoards(INTEGRATION_LIKE_BOARDS);
     const act2 = act.filter((a) => a.entity.startsWith('ACT2.'));

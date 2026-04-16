@@ -73,6 +73,7 @@ export default function WindowLauncher() {
     { id: 'solenoid-char', name: 'Solenoid Characterization', description: 'PWM duty cycle & frequency for solenoid performance', url: '/window/solenoid-char', accent: '#F59E0B' },
     { id: 'encoders', name: 'Encoders', description: 'Encoder board angles and connection status', url: '/window/encoders', accent: '#7C3AED' },
     { id: 'feed-char', name: 'Feed System Char', description: 'CdA, MDOT, Reynolds Number characterization', url: '/window/feed-char', accent: '#3B82F6' },
+    { id: 'tabling', name: 'Tabling', description: 'One-off demo: 12V actuator slot, TC/PT/LC plots, PT>75 PSI → OPEN', url: '/window/tabling', accent: '#14B8A6' },
   ];
 
   return (

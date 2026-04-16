@@ -111,6 +111,7 @@ kill_stale_integration_processes() {
 }
 
 cleanup() {
+  set +e  # cleanup must not be aborted by set -e
   echo ""
   echo "🧹 Cleaning up..."
   # First kill tracked PIDs (graceful, then force)

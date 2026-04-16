@@ -15,10 +15,10 @@
 #include <thread>
 #include <vector>
 
+#include "DAQv2-Comms.h"
 #include "comms/messages/board/BoardHeartbeatMessage.hpp"
 #include "comms/messages/sensor/CalibratedSensorMessages.hpp"
 #include "comms/messages/sensor/SensorMessages.hpp"
-#include "DAQv2-Comms.h"
 #include "fsw/BoardTypeWire.hpp"
 
 namespace {

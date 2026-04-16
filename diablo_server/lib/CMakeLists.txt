@@ -7,6 +7,7 @@ set(FSW_SOURCES
     src/config/DynamicConfigManager.cpp
     src/config/SensorAssignment.cpp
     src/config/ConfigParser.cpp
+    src/config/LoadActiveBoards.cpp
     src/routing/HeartbeatRouter.cpp
     src/routing/SensorRouter.cpp
     src/elodin/DatabaseConfig.cpp

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { useSensorStore, useSensorValue } from '@/lib/store';
 import { getEntityColor } from '@/lib/sensor-colors';
 import { getWebSocketClient } from '@/lib/websocket';
-import { ActuatorId, ActuatorState } from '@/lib/types';
+import { ActuatorState } from '@/lib/types';
 import TimeSeriesPlot from '@/components/plots/TimeSeriesPlot';
 import {
   ScatterChart,
@@ -141,33 +141,26 @@ export default function FeedCharacterizationPage() {
     }
   }, [isTestRunning, currentUpVal, currentDownVal]);
 
-  const getActuatorCommands = useCallback((): { id: ActuatorId; name: string }[] => {
-    if (selectedSystemLabel === 'Fuel') return [{ id: ActuatorId.FUEL_MAIN, name: 'Fuel Main' }];
-    if (selectedSystemLabel === 'LOX') return [{ id: ActuatorId.LOX_MAIN, name: 'LOX Main' }];
-    if (selectedSystemLabel === 'COPV') {
-      return [
-        { id: ActuatorId.FUEL_PRESS, name: 'Fuel Press' },
-        { id: ActuatorId.LOX_PRESS, name: 'LOX Press' },
-      ];
-    }
+  const getActuatorNames = useCallback((): string[] => {
+    if (selectedSystemLabel === 'Fuel') return ['Fuel Main'];
+    if (selectedSystemLabel === 'LOX') return ['LOX Main'];
+    if (selectedSystemLabel === 'COPV') return ['Fuel Press', 'LOX Press'];
     return [];
   }, [selectedSystemLabel]);
 
   const toggleSolenoids = useCallback(
     (state: ActuatorState) => {
-      const commands = getActuatorCommands();
-      commands.forEach((cmd) => {
+      getActuatorNames().forEach((name) => {
         ws.sendCommand({
           commandType: 'actuator',
           data: {
-            actuatorId: cmd.id,
-            actuatorName: cmd.name,
+            actuatorName: name,
             actuatorState: state,
           },
         });
       });
     },
-    [getActuatorCommands, ws],
+    [getActuatorNames, ws],
   );
 
   const sampleNow = useCallback(

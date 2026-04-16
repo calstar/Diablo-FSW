@@ -80,7 +80,7 @@ afterEach(() => {
 
 describe('WebSocketClient', () => {
   it('should serialize sendCommand as correct JSON', async () => {
-    const client = new WebSocketClient('ws://test:8081');
+    const client = new WebSocketClient(['ws://test:8081']);
     client.connect();
 
     // Wait for connection
@@ -106,7 +106,7 @@ describe('WebSocketClient', () => {
   });
 
   it('should serialize actuator command correctly', async () => {
-    const client = new WebSocketClient('ws://test:8081');
+    const client = new WebSocketClient(['ws://test:8081']);
     client.connect();
     await vi.waitFor(() => {
       expect(mockWsInstance?.readyState).toBe(MockWebSocket.OPEN);
@@ -131,7 +131,7 @@ describe('WebSocketClient', () => {
   });
 
   it('should queue messages when WebSocket is not connected', () => {
-    const client = new WebSocketClient('ws://test:8081');
+    const client = new WebSocketClient(['ws://test:8081']);
     // Don't call connect() — WS is null
 
     client.sendCommand({
@@ -145,7 +145,7 @@ describe('WebSocketClient', () => {
   });
 
   it('should dispatch messages to correct listeners', async () => {
-    const client = new WebSocketClient('ws://test:8081');
+    const client = new WebSocketClient(['ws://test:8081']);
     client.connect();
     await vi.waitFor(() => {
       expect(mockWsInstance?.readyState).toBe(MockWebSocket.OPEN);
@@ -184,7 +184,7 @@ describe('WebSocketClient', () => {
   });
 
   it('should return working unsubscribe function from on()', async () => {
-    const client = new WebSocketClient('ws://test:8081');
+    const client = new WebSocketClient(['ws://test:8081']);
     client.connect();
     await vi.waitFor(() => {
       expect(mockWsInstance?.readyState).toBe(MockWebSocket.OPEN);
@@ -214,7 +214,7 @@ describe('WebSocketClient', () => {
   });
 
   it('should report connection status', async () => {
-    const client = new WebSocketClient('ws://test:8081');
+    const client = new WebSocketClient(['ws://test:8081']);
 
     expect(client.isConnected()).toBe(false);
 

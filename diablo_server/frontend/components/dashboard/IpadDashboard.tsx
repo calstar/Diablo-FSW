@@ -1,15 +1,12 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useSensorStore, useSensorValue, usePressureHistoryPlotSeries } from '@/lib/store';
-import { getApiBaseUrl, getWebSocketClient } from '@/lib/websocket';
-import { MessageType, SensorUpdate, StateUpdate, ActuatorUpdate, SystemState, ActuatorId } from '@/lib/types';
-import { startDataCache } from '@/lib/data-cache';
+import { SystemState } from '@/lib/types';
 import StateMachineDiagram from '@/components/controls/StateMachineDiagram';
 import ActuatorControlByName from '@/components/controls/ActuatorControlByName';
 import TimeSeriesPlot from '@/components/plots/TimeSeriesPlot';
-import type { SensorConfig } from '@/lib/sensor-config';
-import { buildPressurePlotSeriesFromSensorList, type PressurePlotSeries } from '@/lib/pressure-bar-defs';
+import { useActuatorsFromConfig, usePressureSensors } from '@/lib/dashboard-hooks';
 
 // Time window options for history plotting
 const TIME_WINDOWS = [
@@ -21,61 +18,9 @@ const TIME_WINDOWS = [
 
 export default function IpadDashboard() {
     const currentState = useSensorStore((state) => state.currentState);
-    const ws = getWebSocketClient();
     const [timeWindow, setTimeWindow] = useState(60);
-    const [actuatorsFromConfig, setActuatorsFromConfig] = useState<{ name: string; channel: number; entity: string; boardId?: number }[]>([]);
-    const [pressureSensorsPlot, setPressureSensorsPlot] = useState<PressurePlotSeries[]>(() =>
-        buildPressurePlotSeriesFromSensorList([]));
-
-    const loadActuatorsFromConfig = useCallback(() => {
-        fetch(`${getApiBaseUrl()}/api/config`)
-            .then((r) => (r.ok ? r.json() : null))
-            .then((data: { config?: { actuator_roles?: Record<string, any> } } | null) => {
-                const roles = data?.config?.actuator_roles;
-                if (!roles || typeof roles !== 'object') return;
-                setActuatorsFromConfig(
-                    Object.entries(roles).map(([name, value]) => {
-                        const channel = Array.isArray(value) && value.length >= 2 && typeof value[1] === 'number' ? value[1] : 1;
-                        const boardId = Array.isArray(value) && value.length >= 3 && typeof value[2] === 'number' ? value[2] : undefined;
-                        const entity = `ACT.${name.replace(/\s+/g, '_')}`;
-                        return { name, channel, entity, boardId };
-                    })
-                );
-            })
-            .catch(() => { });
-    }, []);
-
-    const loadPressureSensors = useCallback(() => {
-        fetch(`${getApiBaseUrl()}/api/sensor-config`)
-            .then((r) => (r.ok ? r.json() : null))
-            .then((data: { sensors?: SensorConfig[] } | null) => {
-                const sensors = data?.sensors;
-                if (!Array.isArray(sensors) || sensors.length === 0) {
-                    setPressureSensorsPlot(buildPressurePlotSeriesFromSensorList([]));
-                    return;
-                }
-                setPressureSensorsPlot(buildPressurePlotSeriesFromSensorList(sensors));
-            })
-            .catch(() => {
-                setPressureSensorsPlot(buildPressurePlotSeriesFromSensorList([]));
-            });
-    }, []);
-
-    useEffect(() => {
-        loadActuatorsFromConfig();
-        loadPressureSensors();
-    }, [loadActuatorsFromConfig, loadPressureSensors]);
-
-    useEffect(() => {
-        const u6 = ws.on(MessageType.CONFIG_UPDATED, () => {
-            loadActuatorsFromConfig();
-            loadPressureSensors();
-        });
-
-        return () => {
-            u6();
-        };
-    }, [ws, loadActuatorsFromConfig, loadPressureSensors]);
+    const actuatorsFromConfig = useActuatorsFromConfig();
+    const pressureSensorsPlot = usePressureSensors();
 
     const isFireState = currentState === SystemState.FIRE;
     const pressurePlotForChart = usePressureHistoryPlotSeries(pressureSensorsPlot);

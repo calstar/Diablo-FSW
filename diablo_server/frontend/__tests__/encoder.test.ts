@@ -143,7 +143,7 @@ describe('Encoder sensor data through store', () => {
         expect(data['ENC.CH2.raw_angle']).toBe(1024);
     });
 
-    it('applies last write for encoder (no timestamp rejection; same as other streams)', async () => {
+    it('rejects older-timestamped encoder updates (prevents late UDP/WS frame rewind)', async () => {
         const { updateSensor } = useSensorStore.getState();
         const now = Date.now();
 
@@ -151,9 +151,10 @@ describe('Encoder sensor data through store', () => {
         await waitForSensorFlush();
         expect(useSensorStore.getState().sensorData['ENC.CH1.raw_angle']).toBe(100);
 
+        // Older timestamp should be rejected — encoder uses timestamp-based filtering
         updateSensor({ entity: 'ENC.CH1', component: 'raw_angle', value: 50, timestamp: now - 5000 });
         await waitForSensorFlush();
-        expect(useSensorStore.getState().sensorData['ENC.CH1.raw_angle']).toBe(50);
+        expect(useSensorStore.getState().sensorData['ENC.CH1.raw_angle']).toBe(100);
     });
 
     it('resolves ENC.CH1 from ENC1.CH1 via static alias (backend entity names)', async () => {

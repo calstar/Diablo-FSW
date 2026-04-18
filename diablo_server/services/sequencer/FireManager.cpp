@@ -44,14 +44,29 @@ void FireManager::start(std::function<void()> on_expire) {
 }
 
 void FireManager::stop() {
-    if (!active_)
-        return;
+    // NOTE: we must always reap timer_thread_ if it is joinable, even when
+    // active_ is already false. runTimer() sets active_ = false *before*
+    // invoking on_expire_(), which means a natural timer expiration leaves
+    // the std::thread object joinable but with active_ == false. The next
+    // start() then move-assigns into a joinable std::thread, which triggers
+    // std::terminate ("terminate called without an active exception").
+    const bool was_active = active_.exchange(false);
     cancel_ = true;
-    active_ = false;
-    if (timer_thread_.joinable())
-        timer_thread_.join();
-    notifyController("FIRE_STOP\n");
-    std::cout << "[FireManager] FIRE stopped" << std::endl;
+
+    if (timer_thread_.joinable()) {
+        if (timer_thread_.get_id() == std::this_thread::get_id()) {
+            // Called from on_expire_ on the timer thread itself: cannot
+            // join self, so detach. The thread is about to return anyway.
+            timer_thread_.detach();
+        } else {
+            timer_thread_.join();
+        }
+    }
+
+    if (was_active) {
+        notifyController("FIRE_STOP\n");
+        std::cout << "[FireManager] FIRE stopped" << std::endl;
+    }
 }
 
 void FireManager::extend() {
